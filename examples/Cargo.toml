@@ -1,0 +1,35 @@
+[package]
+name = "examples"
+version = "0.0.0"
+authors = ["SenYeezus <simpsonsenyo@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+tracing = "0.1.29"
+tracing-subscriber = "0.3.6"
+chrono = { path = "../chrono"}
+
+
+[[example]]
+name = "join"
+path = "join.rs"
+
+[[example]]
+name = "channels"
+path = "channels.rs"
+
+[[example]]
+name = "tcp_read"
+path = "tcp_read.rs"
+
+[[example]]
+name = "sleep"
+path = "sleep.rs"
+
+[[example]]
+name = "panic"
+path = "panic.rs"
+
+[[example]]
+name = "drop_joinhandle"
+path = "drop_joinhandle.rs"
