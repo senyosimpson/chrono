@@ -16,21 +16,24 @@ pub(crate) struct Context(RefCell<OnceCell<Handle>>);
 unsafe impl Sync for Context {}
 
 impl Context {
-    pub(crate) const fn new() -> Context {
+    const fn new() -> Context {
         Context(RefCell::new(OnceCell::new()))
     }
 
-    pub(crate) fn set(&self, handle: Handle) {
+    fn set(&self, handle: Handle) {
+        // We only ever call this once in our program so we ignore
+        // the error. If we break this contract then we should change
+        // this function
         let _ = self.0.borrow().set(handle);
     }
 
-    pub(crate) fn io(&self) -> IoHandle {
+    fn io(&self) -> IoHandle {
         let inner = self.0.borrow();
         let handle = inner.get().expect("No reactor running");
         handle.io.clone()
     }
 
-    pub(crate) fn spawner(&self) -> Spawner {
+    fn spawner(&self) -> Spawner {
         let inner = self.0.borrow();
         let handle = inner.get().expect("No reactor running");
         handle.spawner.clone()
