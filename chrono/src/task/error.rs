@@ -5,8 +5,6 @@ pub enum JoinError {
     Panic(Box<dyn Any + 'static>),
 }
 
-impl std::error::Error for JoinError {}
-
 impl fmt::Display for JoinError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
