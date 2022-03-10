@@ -1,11 +1,47 @@
 use core::cell::RefCell;
 
+use once_cell::unsync::OnceCell;
+
 use super::runtime::Handle;
 use super::runtime::Spawner;
 use crate::io::reactor::Handle as IoHandle;
 
-thread_local! {
-    static CONTEXT: RefCell<Option<Handle>> = RefCell::new(None)
+static CONTEXT: Context = Context::new();
+
+#[derive(Clone)]
+pub(crate) struct Context(RefCell<OnceCell<Handle>>);
+
+// Since we are in a single-threaded environment, it is safe to implement
+// this trait this even though the OnceCell we are using is not thread safe
+unsafe impl Sync for Context {}
+
+impl Context {
+    pub(crate) const fn new() -> Context {
+        Context(RefCell::new(OnceCell::new()))
+    }
+
+    pub(crate) fn set(&self, handle: Handle) {
+        let _ = self.0.borrow().set(handle);
+    }
+
+    pub(crate) fn io(&self) -> IoHandle {
+        let inner = self.0.borrow();
+        let handle = inner.get().expect("No reactor running");
+        handle.io.clone()
+    }
+
+    pub(crate) fn spawner(&self) -> Spawner {
+        let inner = self.0.borrow();
+        let handle = inner.get().expect("No reactor running");
+        handle.spawner.clone()
+    }
+
+    fn with<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&RefCell<OnceCell<Handle>>) -> R,
+    {
+        f(&self.0)
+    }
 }
 
 pub(crate) struct EnterGuard;
@@ -22,36 +58,16 @@ impl Drop for EnterGuard {
 /// Sets this [`Handle`] as the current [`Handle`]. Returns an
 /// [`EnterGuard`] which clears thread local storage once dropped
 pub(super) fn enter(new: Handle) -> EnterGuard {
-    match CONTEXT.try_with(|ctx| {
-        ctx.borrow_mut().replace(new);
-        EnterGuard {}
-    }) {
-        Ok(enter_guard) => enter_guard,
-        Err(_) => panic!("Thread local destroyed"),
-    }
+    CONTEXT.set(new);
+    EnterGuard {}
 }
 
 // ===== Functions for retrieving handles =====
 
 pub(crate) fn io() -> IoHandle {
-    match CONTEXT.try_with(|ctx| {
-        let ctx = ctx.borrow();
-        let handle = ctx.as_ref().expect("No reactor running");
-        handle.io.clone()
-    }) {
-        Ok(io_handle) => io_handle,
-        Err(_) => panic!("Thread local destroyed"),
-    }
+    CONTEXT.io()
 }
 
 pub(crate) fn spawner() -> Spawner {
-    match CONTEXT.try_with(|ctx| {
-        let ctx = ctx.borrow();
-        ctx.as_ref()
-            .map(|handle| handle.spawner.clone())
-            .expect("No reactor running")
-    }) {
-        Ok(spawner) => spawner,
-        Err(_) => panic!("Thread local destroyed"),
-    }
+    CONTEXT.spawner()
 }
