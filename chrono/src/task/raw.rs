@@ -1,9 +1,11 @@
 use std::alloc::{self, Layout};
-use std::future::Future;
-use std::mem;
-use std::pin::Pin;
-use std::ptr::NonNull;
-use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use std::panic;
+
+use core::future::Future;
+use core::mem;
+use core::pin::Pin;
+use core::ptr::NonNull;
+use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use super::error::JoinError;
 use super::header::{Header, TaskId};
@@ -211,8 +213,6 @@ where
 
     // Runs the future and updates its state
     unsafe fn poll(ptr: *const ()) {
-        use std::panic;
-
         let raw = Self::from_ptr(ptr);
         let header = &mut *(raw.header as *mut Header);
 
@@ -245,8 +245,6 @@ where
     }
 
     fn poll_inner(status: &mut Status<F>, cx: &mut Context) -> Poll<()> {
-        use std::panic;
-
         struct Guard<'a, F: Future> {
             status: &'a mut Status<F>,
         }

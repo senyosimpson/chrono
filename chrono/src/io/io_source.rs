@@ -1,7 +1,8 @@
-use std::cell::RefCell;
+use core::cell::RefCell;
+use core::task::{Context, Poll, Waker};
+
 use std::io;
 use std::os::unix::prelude::RawFd;
-use std::task::{Context, Poll, Waker};
 
 use super::epoll::{Event, Token};
 use super::readiness::Readiness;

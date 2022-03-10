@@ -3,10 +3,11 @@
 //!
 //! This *only* supports unbounded channels (for the sake of simplifiying implementation)
 
-use std::cell::RefCell;
+use core::cell::RefCell;
+use core::task::{Context, Poll, Waker};
+
 use std::collections::VecDeque;
 use std::rc::Rc;
-use std::task::{Context, Poll, Waker};
 
 use futures::future::poll_fn;
 

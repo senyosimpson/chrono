@@ -1,8 +1,9 @@
-use std::cell::RefCell;
+use core::cell::RefCell;
+use core::time::Duration;
+
 use std::io;
 use std::os::unix::prelude::RawFd;
 use std::rc::Rc;
-use std::time::Duration;
 
 use slab::Slab;
 

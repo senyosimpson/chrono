@@ -1,7 +1,8 @@
+use core::task::{Context, Poll};
+
 use std::io::{self, Read, Write};
 use std::os::unix::prelude::AsRawFd;
 use std::rc::Rc;
-use std::task::{Context, Poll};
 
 use futures::ready;
 

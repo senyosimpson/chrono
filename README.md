@@ -1,3 +1,3 @@
 # Chrono
 
-A minimal asynchronous runtime built in Rust
+An asynchronous runtime built for embedded systems.

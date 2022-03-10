@@ -1,4 +1,4 @@
-use std::ops;
+use core::ops;
 
 use super::epoll::Event;
 

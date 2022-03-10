@@ -1,9 +1,10 @@
-use std::cell::RefCell;
+use core::cell::RefCell;
+use core::future::Future;
+use core::marker::PhantomData;
+use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
 use std::collections::VecDeque;
-use std::future::Future;
-use std::marker::PhantomData;
 use std::rc::Rc;
-use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use super::context;
 use crate::io::reactor::{Handle as IoHandle, Reactor};

@@ -1,7 +1,8 @@
+use core::pin::Pin;
+use core::task::{Context, Poll};
+
 use std::io;
 use std::net::Shutdown;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 
 use super::addr::ToSocketAddrs;
 use crate::io::{pollable::Pollable, AsyncRead, AsyncWrite};

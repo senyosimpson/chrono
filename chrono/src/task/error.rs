@@ -1,5 +1,5 @@
+use core::any::Any;
 use core::fmt;
-use std::any::Any;
 
 pub enum JoinError {
     Panic(Box<dyn Any + 'static>),

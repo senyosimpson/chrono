@@ -1,6 +1,7 @@
+use core::time::Duration;
+
 use std::io;
 use std::os::unix::prelude::{AsRawFd, RawFd};
-use std::time::Duration;
 
 use self::timerfd::IntervalTimerSpec;
 
@@ -30,10 +31,11 @@ impl AsRawFd for Timer {
 /// Safe wrapper around timer_fd syscalls. It is built with the requirements
 /// of this runtime in mind.
 mod timerfd {
+    use core::ptr;
+    use core::time::Duration;
+
     use std::io;
     use std::os::unix::prelude::RawFd;
-    use std::ptr;
-    use std::time::Duration;
 
     #[repr(C)]
     #[derive(Default)]

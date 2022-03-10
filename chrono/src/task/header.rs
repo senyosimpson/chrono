@@ -1,6 +1,6 @@
-use std::cell::Cell;
-use std::fmt::Display;
-use std::task::Waker;
+use core::cell::Cell;
+use core::fmt::Display;
+use core::task::Waker;
 
 use crate::task::raw::TaskVTable;
 use crate::task::state::State;
@@ -63,7 +63,7 @@ impl TaskId {
 }
 
 impl Display for TaskId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.0)
     }
 }

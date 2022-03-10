@@ -1,8 +1,8 @@
-use std::future::Future;
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::ptr::NonNull;
-use std::task::{Context, Poll};
+use core::future::Future;
+use core::marker::PhantomData;
+use core::pin::Pin;
+use core::ptr::NonNull;
+use core::task::{Context, Poll};
 
 use crate::task::header::Header;
 

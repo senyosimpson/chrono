@@ -5,10 +5,11 @@
 //! This crate *does not* expose all the interest bitflags available for epoll
 //! since they were not necessary for this project.
 
-use std::fmt::Display;
+use core::fmt::Display;
+use core::time::Duration;
+
 use std::io;
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::time::Duration;
 
 use bitflags::bitflags;
 use libc;
@@ -201,7 +202,7 @@ impl Event {
 // ===== impl Interest =====
 
 impl Display for Interest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let interest = self.bits() as libc::c_int;
 
         let epollin = interest & libc::EPOLLIN == libc::EPOLLIN;
@@ -224,9 +225,9 @@ impl Display for Interest {
 // [epoll man pages](https://man7.org/linux/man-pages/man7/epoll.7.html)
 mod epoll {
     use super::{CtlOp, Event, Events};
+    use core::ptr;
     use std::io;
     use std::os::unix::prelude::RawFd;
-    use std::ptr;
 
     // Safe wrapper around `libc::epoll_create1`
     // Sets the close-on-exec flag
