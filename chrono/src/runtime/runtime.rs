@@ -3,7 +3,7 @@ use core::future::Future;
 use core::marker::PhantomData;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
-use std::collections::VecDeque;
+use heapless::Deque;
 use std::rc::Rc;
 
 use super::context;
@@ -11,6 +11,8 @@ use crate::io::reactor::{Handle as IoHandle, Reactor};
 use crate::task::join::JoinHandle;
 use crate::task::raw::{RawTask, Schedule};
 use crate::task::Task;
+
+const MAX_NUM_TASKS: usize = 1024;
 
 pub struct Runtime {
     // Holds the reactor and task queue
@@ -40,13 +42,14 @@ pub struct Spawner {
     queue: Queue,
 }
 
-type Queue = Rc<RefCell<VecDeque<Task>>>;
+// Right now, we've decided to fix the capacity
+type Queue = Rc<RefCell<Deque<Task, MAX_NUM_TASKS>>>;
 
 // ===== impl Runtime =====
 
 impl Runtime {
     pub fn new() -> Runtime {
-        let queue = Rc::new(RefCell::new(VecDeque::new()));
+        let queue = Rc::new(RefCell::new(Deque::new()));
         let spawner = Spawner {
             queue: queue.clone(),
         };
@@ -153,7 +156,9 @@ impl Spawner {
         };
         tracing::debug!("Task {}: Spawned", task.id());
 
-        self.queue.schedule(task);
+        // TODO: Figure out what to do here. This may fail. We can probably just
+        // create a new SpawnError and return that
+        let _ = self.queue.schedule(task);
 
         join_handle
     }
@@ -162,8 +167,8 @@ impl Spawner {
 // ===== impl Queue =====
 
 impl Schedule for Queue {
-    fn schedule(&self, task: Task) {
-        self.borrow_mut().push_back(task);
+    fn schedule(&self, task: Task) -> Result<(), Task> {
+        self.borrow_mut().push_back(task)
     }
 }
 

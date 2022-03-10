@@ -54,7 +54,7 @@ pub struct TaskVTable {
 // All schedulers must implement the Schedule trait. They
 // are responsible for sending tasks to the runtime queue
 pub(crate) trait Schedule {
-    fn schedule(&self, task: Task);
+    fn schedule(&self, task: Task) -> Result<(), Task>;
 }
 
 // ===== impl RawTask =====
@@ -208,7 +208,9 @@ where
         header.state.ref_incr();
 
         let scheduler = &*raw.scheduler;
-        scheduler.schedule(task)
+        // TODO We need to store that a task failed to be scheduled in the
+        // state or something of that kind
+        let _ = scheduler.schedule(task);
     }
 
     // Runs the future and updates its state
