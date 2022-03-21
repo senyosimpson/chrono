@@ -2,6 +2,7 @@ use core::cell::RefCell;
 use core::future::Future;
 use core::marker::PhantomData;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use std::ptr::NonNull;
 
 use heapless::Deque;
 use std::rc::Rc;
@@ -43,7 +44,7 @@ pub struct Spawner {
 }
 
 // Right now, we've decided to fix the capacity
-type Queue = Rc<RefCell<Deque<Task, MAX_NUM_TASKS>>>;
+pub type Queue = Rc<RefCell<Deque<Task, MAX_NUM_TASKS>>>;
 
 // ===== impl Runtime =====
 
@@ -74,8 +75,8 @@ impl Runtime {
     }
 
     // Spawn a task onto the runtime
-    pub fn spawn<F: Future>(&self, future: F) -> JoinHandle<F::Output> {
-        self.handle.spawn(future)
+    pub fn spawn<F: Future>(&self, raw: RawTask<F, Queue>) -> JoinHandle<F::Output> {
+        self.handle.spawn(raw)
     }
 
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
@@ -139,19 +140,41 @@ impl Inner {
 // ===== impl Handle =====
 
 impl Handle {
-    pub fn spawn<F: Future>(&self, future: F) -> JoinHandle<F::Output> {
-        self.spawner.spawn(future)
+    pub fn spawn<F: Future>(&self, raw: RawTask<F, Queue>) -> JoinHandle<F::Output> {
+        self.spawner.spawn(raw)
     }
 }
 
 // ===== impl Spawner =====
 
 impl Spawner {
-    pub fn spawn<F: Future>(&self, future: F) -> JoinHandle<F::Output> {
-        let raw = RawTask::new(future, self.queue.clone());
-        let task = Task { raw };
+    // pub fn spawn<F: Future>(&self, future: F) -> JoinHandle<F::Output> {
+    //     let raw = RawTask::new(future, self.queue.clone());
+    //     let task = Task { raw };
+    //     let join_handle = JoinHandle {
+    //         raw,
+    //         _marker: PhantomData,
+    //     };
+    //     tracing::debug!("Task {}: Spawned", task.id());
+
+    //     // TODO: Figure out what to do here. This may fail. We can probably just
+    //     // create a new SpawnError and return that
+    //     let _ = self.queue.schedule(task);
+
+    //     join_handle
+    // }
+
+    // We're using Memory<_, Queue> because we know Queue implements S
+    pub fn spawn<F: Future>(&self, raw: RawTask<F, Queue>) -> JoinHandle<F::Output> {
+        // We need to write the scheduler into the RawTask
+        let memory = raw.memory();
+        unsafe { memory.scheduler.write(self.queue.clone()) }
+
+        let ptr = unsafe { NonNull::new_unchecked(raw.ptr)};
+
+        let task = Task { raw: ptr };
         let join_handle = JoinHandle {
-            raw,
+            raw: ptr,
             _marker: PhantomData,
         };
         tracing::debug!("Task {}: Spawned", task.id());

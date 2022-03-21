@@ -1,4 +1,4 @@
-use std::alloc::{self, Layout};
+use std::marker::PhantomData;
 use std::panic;
 
 use core::future::Future;
@@ -7,42 +7,40 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
+use super::cell::UninitCell;
 use super::error::JoinError;
 use super::header::{Header, TaskId};
 use super::state::State;
 use super::task::Task;
 
-// The C representation means we have guarantees on
-// the memory layout of the task
-/// The underlying task containing the core components of a task
 #[repr(C)]
-pub(crate) struct RawTask<F: Future, S> {
+pub struct Memory<F: Future, S> {
     /// Header of the task. Contains data related to the state
     /// of a task
-    pub(crate) header: *const Header,
+    pub header: UninitCell<Header>,
     /// Scheduler is responsible for scheduling tasks onto the
     /// runtime. When a task is woken, it calls the related
     /// scheduler to schedule itself
-    pub(crate) scheduler: *const S,
+    pub scheduler: UninitCell<S>,
     /// The status of a task. This is either a future or the
     /// output of a future
-    pub(crate) status: *mut Status<F>,
+    pub status: UninitCell<Status<F>>,
+}
+
+// The C representation means we have guarantees on
+// the memory layout of the task
+/// The underlying task containing the core components of a task
+pub struct RawTask<F: Future, S> {
+    // pub ptr: *const Memory<F, S>,
+    pub ptr: *mut (),
+    pub(crate) _f: PhantomData<F>,
+    pub(crate) _s: PhantomData<S>,
 }
 
 pub enum Status<F: Future> {
     Running(F),
     Finished(super::Result<F::Output>),
     Consumed,
-}
-
-/// Memory layout of a task
-///
-/// It contains both the memory layout and the offsets into
-/// memory in order to access the fields in the task
-pub struct TaskLayout {
-    layout: Layout,
-    offset_schedule: usize,
-    offset_status: usize,
 }
 
 pub struct TaskVTable {
@@ -53,9 +51,52 @@ pub struct TaskVTable {
 
 // All schedulers must implement the Schedule trait. They
 // are responsible for sending tasks to the runtime queue
-pub(crate) trait Schedule {
+pub trait Schedule {
     fn schedule(&self, task: Task) -> Result<(), Task>;
 }
+
+// ===== impl Memory ======
+
+impl<F, S> Memory<F, S>
+where
+    F: Future,
+    S: Schedule,
+{
+    pub const fn alloc() -> Self {
+        Memory {
+            header: UninitCell::uninit(),
+            scheduler: UninitCell::uninit(),
+            status: UninitCell::uninit(),
+        }
+    }
+
+    fn header(&self) -> &Header {
+        unsafe {
+            self.header.as_ref()
+        }
+    }
+
+    #[allow(clippy::mut_from_ref)]
+    unsafe fn mut_header(&self) -> &mut Header{
+        self.header.as_mut()
+    }
+
+    #[allow(dead_code)]
+    unsafe fn status(&self) -> &Status<F> {
+        self.status.as_ref()
+    }
+
+    unsafe fn scheduler(&self) -> &S {
+        self.scheduler.as_ref()
+    }
+
+    #[allow(clippy::mut_from_ref)]
+    unsafe fn mut_status(&self) -> &mut Status<F> {
+        self.status.as_mut()
+    }
+}
+
+unsafe impl<F: Future, S> Sync for Memory<F, S> {}
 
 // ===== impl RawTask =====
 
@@ -73,88 +114,67 @@ where
         Self::drop_waker,
     );
 
-    pub fn new(future: F, scheduler: S) -> NonNull<()> {
-        let task_layout = Self::layout();
-        unsafe {
-            let ptr = match NonNull::new(alloc::alloc(task_layout.layout) as *mut ()) {
-                None => panic!("Could not allocate task!"),
-                Some(ptr) => ptr,
-            };
+    pub fn new(memory: &Memory<F, S>, future: impl FnOnce() -> F) -> RawTask<F, S> {
+        let id = TaskId::new();
 
-            let raw = Self::from_ptr(ptr.as_ptr());
-            let id = TaskId::new();
+        let header = Header {
+            id,
+            state: State::new_with_id(id),
+            waker: None,
+            vtable: &TaskVTable {
+                poll: Self::poll,
+                get_output: Self::get_output,
+                drop_join_handle: Self::drop_join_handle,
+            },
+        };
 
-            let header = Header {
-                id,
-                state: State::new_with_id(id),
-                waker: None,
-                vtable: &TaskVTable {
-                    poll: Self::poll,
-                    get_output: Self::get_output,
-                    drop_join_handle: Self::drop_join_handle,
-                },
-            };
-            (raw.header as *mut Header).write(header);
-            (raw.scheduler as *mut S).write(scheduler);
+        // NOTE: The scheduler is written when a task is spawned
+        // TODO: Should I hide safety in UninitCell?
+        unsafe { memory.header.write(header) }
 
-            let status = Status::Running(future);
-            raw.status.write(status);
+        let status = Status::Running(future());
+        unsafe { memory.status.write(status) };
 
-            ptr
+        // let ptr =  unsafe { NonNull::new_unchecked(memory as *const _ as *mut ()) };
+        // let ptr = memory as *const _;
+
+        let ptr = memory as *const _ as *mut ();
+        RawTask {
+            ptr,
+            _f: PhantomData,
+            _s: PhantomData,
         }
+    }
+
+    pub(crate) fn memory(&self) -> &Memory<F, S> {
+        unsafe { &*(self.ptr as *const Memory<F, S>) }
     }
 
     fn from_ptr(ptr: *const ()) -> Self {
-        let task_layout = Self::layout();
-        let ptr = ptr as *const u8;
-        unsafe {
-            Self {
-                header: ptr as *const Header,
-                scheduler: ptr.add(task_layout.offset_schedule) as *const S,
-                status: ptr.add(task_layout.offset_status) as *mut Status<F>,
-            }
+        let ptr = ptr as *mut ();
+        Self {
+            ptr,
+            _f: PhantomData,
+            _s: PhantomData,
         }
     }
 
-    // Calculates the memory layout requirements and stores offsets into the
-    // task to find the respective fields. The space that needs to be allocated
-    // is for: the future, the scheduling function and the task header
-    pub fn layout() -> TaskLayout {
-        let header_layout = Layout::new::<Header>();
-        let schedule_layout = Layout::new::<S>();
-        let stage_layout = Layout::new::<Status<F>>();
-
-        let layout = header_layout;
-        let (layout, offset_schedule) = layout
-            .extend(schedule_layout)
-            .expect("Could not allocate task!");
-        let (layout, offset_status) = layout
-            .extend(stage_layout)
-            .expect("Could not allocate task!");
-
-        TaskLayout {
-            layout,
-            offset_schedule,
-            offset_status,
-        }
-    }
-
+    // TODO: No deallocations in embedded so we can remove this
+    #[allow(clippy::missing_safety_doc)]
     pub unsafe fn dealloc(ptr: *const ()) {
         let raw = Self::from_ptr(ptr);
-        let header = &*(raw.header as *mut Header);
-
+        let memory = raw.memory();
+        let header = memory.header();
         tracing::debug!("Task {}: Deallocating", header.id);
-
-        let layout = Self::layout();
-        // TODO: Investigate if I need to use .drop_in_place()
-        alloc::dealloc(ptr as *mut u8, layout.layout);
     }
 
     // Makes a clone of the waker
     // Increments the number of references to the waker
     unsafe fn clone_waker(ptr: *const ()) -> RawWaker {
         let raw = Self::from_ptr(ptr);
-        let header = &mut *(raw.header as *mut Header);
+        let memory = raw.memory();
+        let header = memory.mut_header();
+
         header.state.ref_incr();
         RawWaker::new(ptr, &Self::RAW_WAKER_VTABLE)
     }
@@ -163,7 +183,9 @@ where
     // the task is destroyed if the reference count is 0
     unsafe fn drop_waker(ptr: *const ()) {
         let raw = Self::from_ptr(ptr);
-        let header = &mut *(raw.header as *mut Header);
+        let memory = raw.memory();
+        let header = memory.mut_header();
+
         header.state.ref_decr();
         if header.state.ref_count() == 0 {
             Self::dealloc(ptr)
@@ -175,7 +197,8 @@ where
     // to call `wake` even if the task has been driven to completion
     unsafe fn wake(ptr: *const ()) {
         let raw = Self::from_ptr(ptr);
-        let header = &mut *(raw.header as *mut Header);
+        let memory = raw.memory();
+        let header = memory.mut_header();
         tracing::debug!("Task {}: Waking raw task", header.id);
 
         header.state.transition_to_scheduled();
@@ -188,7 +211,8 @@ where
 
     unsafe fn wake_by_ref(ptr: *const ()) {
         let raw = Self::from_ptr(ptr);
-        let header = &mut *(raw.header as *mut Header);
+        let memory = raw.memory();
+        let header = memory.mut_header();
         tracing::debug!("Task {}: Waking raw task by ref", header.id);
 
         header.state.transition_to_scheduled();
@@ -197,7 +221,8 @@ where
 
     unsafe fn schedule(ptr: *const ()) {
         let raw = Self::from_ptr(ptr);
-        let header = &mut *(raw.header as *mut Header);
+        let memory = raw.memory();
+        let header = memory.mut_header();
 
         let task = Task {
             raw: NonNull::new_unchecked(ptr as *mut ()),
@@ -207,7 +232,7 @@ where
         // to the raw task
         header.state.ref_incr();
 
-        let scheduler = &*raw.scheduler;
+        let scheduler = memory.scheduler();
         // TODO We need to store that a task failed to be scheduled in the
         // state or something of that kind
         let _ = scheduler.schedule(task);
@@ -216,14 +241,15 @@ where
     // Runs the future and updates its state
     unsafe fn poll(ptr: *const ()) {
         let raw = Self::from_ptr(ptr);
-        let header = &mut *(raw.header as *mut Header);
+        let memory = raw.memory();
+        let header = memory.mut_header();
 
         let waker = Waker::from_raw(RawWaker::new(ptr, &Self::RAW_WAKER_VTABLE));
         let cx = &mut Context::from_waker(&waker);
 
         header.state.transition_to_running();
 
-        let status = &mut *raw.status;
+        let status = memory.mut_status();
         match Self::poll_inner(status, cx) {
             Poll::Pending => {
                 tracing::debug!("Task pending");
@@ -284,9 +310,11 @@ where
 
     unsafe fn get_output(ptr: *const (), dst: *mut ()) {
         let raw = Self::from_ptr(ptr);
+        let memory = raw.memory();
+        let status = memory.mut_status();
         let dst = dst as *mut Poll<super::Result<F::Output>>;
         // TODO: Improve error handling
-        match mem::replace(&mut *raw.status, Status::Consumed) {
+        match mem::replace(status, Status::Consumed) {
             Status::Finished(output) => {
                 *dst = Poll::Ready(output);
             }
@@ -296,7 +324,8 @@ where
 
     unsafe fn drop_join_handle(ptr: *const ()) {
         let raw = Self::from_ptr(ptr);
-        let header = &mut *(raw.header as *mut Header);
+        let memory = raw.memory();
+        let header = memory.mut_header();
 
         // unset join handle bit
         header.state.unset_join_handle();

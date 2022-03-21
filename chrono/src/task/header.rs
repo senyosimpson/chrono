@@ -5,7 +5,7 @@ use core::task::Waker;
 use crate::task::raw::TaskVTable;
 use crate::task::state::State;
 
-pub(crate) struct Header {
+pub struct Header {
     pub state: State,
     pub waker: Option<Waker>,        // Why is this wrapped in UnsafeCell?
     pub vtable: &'static TaskVTable, // Why &'static? Think cause they are fns
@@ -32,7 +32,7 @@ impl Header {
 struct Counter(Cell<u64>);
 
 #[derive(Clone, Copy)]
-pub(crate) struct TaskId(u64);
+pub struct TaskId(u64);
 
 // ===== impl Counter =====
 

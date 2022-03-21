@@ -17,7 +17,7 @@ fn main() {
         });
 
         let h1 = chrono::spawn(async move {
-            println!("Sending message from task 2 after sleeping");
+            println!("Sending message from task 3 after sleeping");
             sleep(Duration::from_secs(1)).await;
             println!("Done sleeping. Sending message from task 2");
             tx.send("handle 2: hello world").unwrap();

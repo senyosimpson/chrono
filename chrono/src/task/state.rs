@@ -40,8 +40,8 @@ const REF_ONE: usize = 1 << REF_COUNT_SHIFT;
 //   * The internal Task
 const INITIAL_STATE: usize = (REF_ONE * 2) | SCHEDULED | JOIN_HANDLE;
 
-pub(crate) struct State {
-    pub(crate) state: usize,
+pub struct State {
+    pub state: usize,
     task_id: Option<TaskId>,
 }
 

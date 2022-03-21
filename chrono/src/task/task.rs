@@ -2,8 +2,8 @@ use core::ptr::NonNull;
 
 use super::header::{Header, TaskId};
 
-pub(crate) struct Task {
-    pub(crate) raw: NonNull<()>,
+pub struct Task {
+    pub raw: NonNull<()>,
 }
 
 impl Task {
