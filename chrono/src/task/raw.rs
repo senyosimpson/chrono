@@ -31,7 +31,6 @@ pub struct Memory<F: Future, S> {
 // the memory layout of the task
 /// The underlying task containing the core components of a task
 pub struct RawTask<F: Future, S> {
-    // pub ptr: *const Memory<F, S>,
     pub ptr: *mut (),
     pub(crate) _f: PhantomData<F>,
     pub(crate) _s: PhantomData<S>,
