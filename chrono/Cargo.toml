@@ -16,3 +16,4 @@ tracing = "0.1.29"
 heapless = "0.7.10"
 
 chrono-macros = { path = "../chrono-macros"}
+once_cell = "1.10.0"

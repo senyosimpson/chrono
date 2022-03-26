@@ -4,13 +4,26 @@
 use core::cell::RefCell;
 use core::task::{Context, Poll, Waker};
 
-use heapless::Deque;
 use futures::future::poll_fn;
+use heapless::Deque;
 
+use super::cell::StaticCell;
 use super::error::{SendError, TryRecvError};
 
-pub fn split<T, const N: usize>(chan: &mut Channel<T, N>) -> (Sender<T, N>, Receiver<T, N>) {
+pub fn split<T, const N: usize>(chan: &Channel<T, N>) -> (Sender<T, N>, Receiver<T, N>) {
     (Sender { chan }, Receiver { chan })
+}
+
+pub struct ChannelCell<T, const N: usize>(StaticCell<Channel<T, N>>);
+
+impl<T, const N: usize> ChannelCell<T, N> {
+    pub const fn new() -> ChannelCell<T, N> {
+        ChannelCell(StaticCell::new())
+    }
+
+    pub fn set(&self, channel: Channel<T, N>) -> &Channel<T, N> {
+        self.0.set(channel)
+    }
 }
 
 pub struct Sender<'ch, T, const N: usize> {

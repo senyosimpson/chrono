@@ -14,13 +14,9 @@ chrono = { path = "../chrono"}
 # name = "join"
 # path = "join.rs"
 
-# [[example]]
-# name = "channels"
-# path = "channels.rs"
-
 [[example]]
-name = "channels_static"
-path = "channels_static.rs"
+name = "channels"
+path = "channels.rs"
 
 # [[example]]
 # name = "tcp_read"
