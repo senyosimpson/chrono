@@ -1,4 +1,4 @@
 pub mod error;
 
 pub mod mpsc;
-pub use mpsc::{channel, Channel, Receiver};
+pub use mpsc::{Channel, Receiver};

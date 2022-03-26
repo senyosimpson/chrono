@@ -1,11 +1,11 @@
-use std::marker::PhantomData;
-use std::panic;
-
 use core::future::Future;
+use core::marker::PhantomData;
 use core::mem;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
+use std::panic;
 
 use super::cell::UninitCell;
 use super::error::JoinError;

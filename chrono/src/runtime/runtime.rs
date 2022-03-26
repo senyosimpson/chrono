@@ -2,7 +2,7 @@ use core::cell::RefCell;
 use core::future::Future;
 use core::marker::PhantomData;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-use std::ptr::NonNull;
+use core::ptr::NonNull;
 
 use heapless::Deque;
 use std::rc::Rc;
@@ -10,7 +10,7 @@ use std::rc::Rc;
 use super::context;
 use crate::io::reactor::{Handle as IoHandle, Reactor};
 use crate::task::join::JoinHandle;
-use crate::task::raw::{RawTask, Schedule};
+use crate::task::{RawTask, Schedule};
 use crate::task::Task;
 
 const MAX_NUM_TASKS: usize = 1024;

@@ -1,39 +1,34 @@
 //! A multi-producer, single-consumer queue for sending values between
 //! asynchronous tasks.
-//!
-//! This *only* supports unbounded channels (for the sake of simplifiying implementation)
 
 use core::cell::RefCell;
 use core::task::{Context, Poll, Waker};
 
-use std::collections::VecDeque;
-use std::rc::Rc;
-
+use heapless::Deque;
 use futures::future::poll_fn;
 
 use super::error::{SendError, TryRecvError};
 
-pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
-    let chan = Rc::new(Channel::new());
-    (Sender::new(chan.clone()), Receiver::new(chan))
+pub fn split<T, const N: usize>(chan: &mut Channel<T, N>) -> (Sender<T, N>, Receiver<T, N>) {
+    (Sender { chan }, Receiver { chan })
 }
 
-pub struct Sender<T> {
-    chan: Rc<Channel<T>>,
+pub struct Sender<'ch, T, const N: usize> {
+    chan: &'ch Channel<T, N>,
 }
 
-pub struct Receiver<T> {
-    chan: Rc<Channel<T>>,
+pub struct Receiver<'ch, T, const N: usize> {
+    chan: &'ch Channel<T, N>,
 }
 
-pub struct Channel<T> {
+pub struct Channel<T, const N: usize> {
     // Inner state of the channel
-    inner: RefCell<Inner<T>>,
+    inner: RefCell<Inner<T, N>>,
 }
 
-struct Inner<T> {
+struct Inner<T, const N: usize> {
     // queue holding messages
-    queue: VecDeque<T>,
+    queue: Deque<T, N>,
     // Number of outstanding sender handles. When it drops to
     // zero, we close the sending half of the channel
     tx_count: usize,
@@ -50,11 +45,7 @@ enum State {
 
 // ==== impl Sender =====
 
-impl<T> Sender<T> {
-    pub fn new(chan: Rc<Channel<T>>) -> Sender<T> {
-        Sender { chan }
-    }
-
+impl<'ch, T, const N: usize> Sender<'ch, T, N> {
     // This does not need to be async as sending to an unbounded queue
     // will never block
     pub fn send(&self, message: T) -> Result<(), SendError<T>> {
@@ -62,16 +53,14 @@ impl<T> Sender<T> {
     }
 }
 
-impl<T> Clone for Sender<T> {
+impl<'ch, T, const N: usize> Clone for Sender<'ch, T, N> {
     fn clone(&self) -> Self {
         self.chan.incr_tx_count();
-        Self {
-            chan: self.chan.clone(),
-        }
+        Self { chan: self.chan }
     }
 }
 
-impl<T> Drop for Sender<T> {
+impl<'ch, T, const N: usize> Drop for Sender<'ch, T, N> {
     fn drop(&mut self) {
         tracing::debug!("Dropping sender");
         self.chan.decr_tx_count();
@@ -83,11 +72,7 @@ impl<T> Drop for Sender<T> {
 
 // ===== impl Receiver =====
 
-impl<T> Receiver<T> {
-    pub fn new(chan: Rc<Channel<T>>) -> Receiver<T> {
-        Receiver { chan }
-    }
-
+impl<'ch, T, const N: usize> Receiver<'ch, T, N> {
     pub async fn recv(&self) -> Option<T> {
         poll_fn(|cx| self.chan.recv(cx)).await
     }
@@ -97,7 +82,7 @@ impl<T> Receiver<T> {
     }
 }
 
-impl<T> Drop for Receiver<T> {
+impl<'ch, T, const N: usize> Drop for Receiver<'ch, T, N> {
     fn drop(&mut self) {
         tracing::debug!("Dropping receiver");
         self.chan.close();
@@ -106,11 +91,11 @@ impl<T> Drop for Receiver<T> {
 
 // ===== impl Channel =====
 
-impl<T> Channel<T> {
-    pub fn new() -> Channel<T> {
+impl<T, const N: usize> Channel<T, N> {
+    pub fn new() -> Channel<T, N> {
         Channel {
             inner: RefCell::new(Inner {
-                queue: VecDeque::new(),
+                queue: Deque::new(),
                 tx_count: 1,
                 state: State::Open,
                 rx_waker: None,

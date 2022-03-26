@@ -6,10 +6,8 @@ mod header;
 pub(crate) mod join;
 pub use join::JoinHandle;
 
-pub(crate) mod raw;
-pub use raw::RawTask;
-pub use raw::Schedule;
-pub use raw::Memory;
+mod raw;
+pub use raw::{RawTask, Memory, Schedule};
 
 mod result;
 pub(crate) use result::Result;

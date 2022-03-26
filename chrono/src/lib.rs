@@ -10,8 +10,6 @@ pub use runtime::Runtime;
 
 pub mod task;
 pub use task::spawn;
-pub use task::RawTask;
-pub use task::Schedule;
 pub use task::Task;
 
 // Re-exports

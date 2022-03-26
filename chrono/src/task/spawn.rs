@@ -1,7 +1,8 @@
 use core::future::Future;
 
 use crate::runtime::Queue;
-use crate::{runtime, RawTask};
+use crate::runtime;
+use crate::task::raw::RawTask;
 use crate::task::join::JoinHandle;
 
 pub fn spawn<F: Future>(raw: RawTask<F, Queue>) -> JoinHandle<F::Output> {

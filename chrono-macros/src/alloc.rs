@@ -12,12 +12,9 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
         // }
         match arg {
             syn::FnArg::Receiver(_) => {}
-            syn::FnArg::Typed(t) => match t.pat.as_mut() {
-                syn::Pat::Ident(i) => {
-                    arg_names.push(i.ident.clone());
-                    i.mutability = None;
-                }
-                _ => {}
+            syn::FnArg::Typed(t) => if let syn::Pat::Ident(i) = t.pat.as_mut() {
+                arg_names.push(i.ident.clone());
+                i.mutability = None;
             },
         }
     }
@@ -39,8 +36,8 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
 
             type F = #impl_ty;
 
-            static MEMORY: Memory<F, Queue> = Memory::alloc();
-            RawTask::new(&MEMORY, move || task(#arg_names))
+            static MEMORY: Memory<F, ::chrono::runtime::Queue> = Memory::alloc();
+            ::chrono::task::RawTask::new(&MEMORY, move || task(#arg_names))
         }
     }.into()
 }
