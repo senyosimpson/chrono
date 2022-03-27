@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use quote::{quote, format_ident};
+use quote::{format_ident, quote};
 
 pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
     let mut arg_names: syn::punctuated::Punctuated<syn::Ident, syn::Token![,]> =
@@ -12,10 +12,12 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
         // }
         match arg {
             syn::FnArg::Receiver(_) => {}
-            syn::FnArg::Typed(t) => if let syn::Pat::Ident(i) = t.pat.as_mut() {
-                arg_names.push(i.ident.clone());
-                i.mutability = None;
-            },
+            syn::FnArg::Typed(t) => {
+                if let syn::Pat::Ident(i) = t.pat.as_mut() {
+                    arg_names.push(i.ident.clone());
+                    i.mutability = None;
+                }
+            }
         }
     }
 
@@ -26,7 +28,7 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
 
     f.sig.ident = format_ident!("task");
 
-    let impl_ty = quote! (impl ::core::future::Future);
+    let impl_ty = quote!(impl ::core::future::Future);
 
     quote! {
         #(#attrs)*

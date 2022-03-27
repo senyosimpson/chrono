@@ -70,13 +70,11 @@ where
     }
 
     fn header(&self) -> &Header {
-        unsafe {
-            self.header.as_ref()
-        }
+        unsafe { self.header.as_ref() }
     }
 
     #[allow(clippy::mut_from_ref)]
-    unsafe fn mut_header(&self) -> &mut Header{
+    unsafe fn mut_header(&self) -> &mut Header {
         self.header.as_mut()
     }
 

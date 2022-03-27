@@ -7,7 +7,7 @@ pub(crate) mod join;
 pub use join::JoinHandle;
 
 mod raw;
-pub use raw::{RawTask, Memory, Schedule};
+pub use raw::{Memory, RawTask, Schedule};
 
 mod result;
 pub(crate) use result::Result;

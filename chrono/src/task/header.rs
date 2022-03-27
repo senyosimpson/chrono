@@ -45,7 +45,7 @@ impl Counter {
     const fn new() -> Counter {
         Counter(Cell::new(0))
     }
-    
+
     pub fn incr(&self) -> u64 {
         let prev = self.0.get();
         let new = prev + 1;

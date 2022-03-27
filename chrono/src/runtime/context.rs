@@ -53,9 +53,7 @@ impl Drop for EnterGuard {
 /// Sets this [`Handle`] as the current [`Handle`]. Returns an
 /// [`EnterGuard`] which clears thread local storage once dropped
 pub(super) fn enter(new: Handle) -> EnterGuard {
-    CONTEXT.with(|ctx| {
-        ctx.borrow_mut().replace(new)
-    });
+    CONTEXT.with(|ctx| ctx.borrow_mut().replace(new));
     EnterGuard {}
 }
 

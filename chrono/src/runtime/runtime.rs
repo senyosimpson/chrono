@@ -1,8 +1,8 @@
 use core::cell::RefCell;
 use core::future::Future;
 use core::marker::PhantomData;
-use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use core::ptr::NonNull;
+use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use heapless::Deque;
 use std::rc::Rc;
@@ -10,8 +10,8 @@ use std::rc::Rc;
 use super::context;
 use crate::io::reactor::{Handle as IoHandle, Reactor};
 use crate::task::join::JoinHandle;
-use crate::task::{RawTask, Schedule};
 use crate::task::Task;
+use crate::task::{RawTask, Schedule};
 
 const MAX_NUM_TASKS: usize = 1024;
 
@@ -170,7 +170,7 @@ impl Spawner {
         let memory = raw.memory();
         unsafe { memory.scheduler.write(self.queue.clone()) }
 
-        let ptr = unsafe { NonNull::new_unchecked(raw.ptr)};
+        let ptr = unsafe { NonNull::new_unchecked(raw.ptr) };
 
         let task = Task { raw: ptr };
         let join_handle = JoinHandle {
