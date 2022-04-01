@@ -75,7 +75,7 @@ impl<'ch, T, const N: usize> Clone for Sender<'ch, T, N> {
 
 impl<'ch, T, const N: usize> Drop for Sender<'ch, T, N> {
     fn drop(&mut self) {
-        tracing::debug!("Dropping sender");
+        defmt::debug!("Dropping sender");
         self.chan.decr_tx_count();
         if self.chan.tx_count() == 0 {
             self.chan.close();
@@ -97,7 +97,7 @@ impl<'ch, T, const N: usize> Receiver<'ch, T, N> {
 
 impl<'ch, T, const N: usize> Drop for Receiver<'ch, T, N> {
     fn drop(&mut self) {
-        tracing::debug!("Dropping receiver");
+        defmt::debug!("Dropping receiver");
         self.chan.close();
     }
 }

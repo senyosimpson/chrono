@@ -125,7 +125,7 @@ impl Epoll {
             None => -1, // TThis blocks indefinitely
         };
         let n_events = epoll::wait(self.fd, events, timeout)?;
-        tracing::debug!("Epoll: Received {} events", n_events);
+        defmt::debug!("Epoll: Received {} events", n_events);
 
         // This is actually safe to call because `epoll::wait` returns the
         // number of events that were returned. Got this from Mio:
@@ -141,7 +141,7 @@ impl Epoll {
 
 impl Drop for Epoll {
     fn drop(&mut self) {
-        tracing::debug!("Drop: epoll_fd={}", self.fd);
+        defmt::debug!("Drop: epoll_fd={}", self.fd);
         let _ = self.close();
     }
 }

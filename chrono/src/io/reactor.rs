@@ -57,7 +57,7 @@ impl Reactor {
         self.inner.poll.poll(&mut self.events, timeout)?;
 
         for event in self.events.iter() {
-            tracing::debug!(
+            defmt::debug!(
                 "Epoll: processing Event {{ token={}, interest={} }}",
                 event.token().0,
                 event.interest()
@@ -90,7 +90,7 @@ impl Handle {
 
 impl Inner {
     pub fn register(&self, io: RawFd, interest: Interest) -> io::Result<Rc<IoSource>> {
-        tracing::debug!("Registering task in epoll");
+        defmt::debug!("Registering task in epoll");
 
         let mut sources = self.sources.borrow_mut();
         let entry = sources.vacant_entry();
@@ -110,7 +110,7 @@ impl Inner {
     }
 
     pub fn deregister(&self, token: Token) -> io::Result<()> {
-        tracing::debug!("Deregistering task from epoll");
+        defmt::debug!("Deregistering task from epoll");
         let source = self.sources.borrow_mut().remove(token.0);
         self.poll.delete(source.io)
     }

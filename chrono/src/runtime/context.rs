@@ -43,7 +43,7 @@ pub(crate) struct EnterGuard;
 
 impl Drop for EnterGuard {
     fn drop(&mut self) {
-        tracing::debug!("Dropping enter guard");
+        defmt::debug!("Dropping enter guard");
         CONTEXT.with(|ctx| {
             ctx.borrow_mut().take();
         })

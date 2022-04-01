@@ -162,7 +162,7 @@ where
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
         let header = memory.header();
-        tracing::debug!("Task {}: Deallocating", header.id);
+        defmt::debug!("Task {}: Deallocating", header.id);
     }
 
     // Makes a clone of the waker
@@ -196,7 +196,7 @@ where
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
         let header = memory.mut_header();
-        tracing::debug!("Task {}: Waking raw task", header.id);
+        defmt::debug!("Task {}: Waking raw task", header.id);
 
         header.state.transition_to_scheduled();
         // We get one reference count from the caller. We schedule a task which
@@ -210,7 +210,7 @@ where
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
         let header = memory.mut_header();
-        tracing::debug!("Task {}: Waking raw task by ref", header.id);
+        defmt::debug!("Task {}: Waking raw task by ref", header.id);
 
         header.state.transition_to_scheduled();
         Self::schedule(ptr);
@@ -249,7 +249,7 @@ where
         let status = memory.mut_status();
         match Self::poll_inner(status, cx) {
             Poll::Pending => {
-                tracing::debug!("Task pending");
+                defmt::debug!("Task pending");
                 header.state.transition_to_idle();
             }
             Poll::Ready(_) => {

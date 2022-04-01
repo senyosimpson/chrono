@@ -65,7 +65,7 @@ impl State {
         self.state += REF_ONE;
 
         if let Some(task_id) = self.task_id {
-            tracing::debug!(
+            defmt::debug!(
                 "Task {}: Incr ref count. Value: {}",
                 task_id,
                 self.ref_count()
@@ -77,7 +77,7 @@ impl State {
         self.state -= REF_ONE;
 
         if let Some(task_id) = self.task_id {
-            tracing::debug!(
+            defmt::debug!(
                 "Task {}: Decr ref count. Value: {}",
                 task_id,
                 self.ref_count()
@@ -136,7 +136,7 @@ impl State {
         self.set_complete();
         self.unset_running();
         if let Some(task_id) = self.task_id {
-            tracing::debug!(
+            defmt::debug!(
                 "Task {}: Transitioned to complete. State: {}",
                 task_id,
                 self
@@ -148,7 +148,7 @@ impl State {
         self.set_running();
         self.unset_scheduled();
         if let Some(task_id) = self.task_id {
-            tracing::debug!("Task {}: Transitioned to running. State: {}", task_id, self);
+            defmt::debug!("Task {}: Transitioned to running. State: {}", task_id, self);
         }
     }
 
@@ -156,7 +156,7 @@ impl State {
         self.unset_running();
         self.unset_scheduled();
         if let Some(task_id) = self.task_id {
-            tracing::debug!("Task {}: Transitioned to idle. State: {}", task_id, self);
+            defmt::debug!("Task {}: Transitioned to idle. State: {}", task_id, self);
         }
     }
 
@@ -164,7 +164,7 @@ impl State {
         self.set_scheduled();
         self.unset_running();
         if let Some(task_id) = self.task_id {
-            tracing::debug!(
+            defmt::debug!(
                 "Task {}: Transitioned to scheduled. State: {}",
                 task_id,
                 self

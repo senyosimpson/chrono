@@ -116,12 +116,12 @@ impl IoSource {
     /// Determines whether the IO resource is ready for reading. Just
     /// forwards to [`poll_ready`] with a read [`Direction`]
     pub fn poll_readable(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        tracing::debug!("Invoking poll_readable");
+        defmt::debug!("Invoking poll_readable");
         let res = self.poll_ready(Direction::Read, cx);
         match res {
-            Poll::Ready(Ok(())) => tracing::debug!("poll_readable returned Poll::Ready(ok)"),
-            Poll::Ready(Err(_)) => tracing::debug!("poll_readable returned Poll::Ready(err)"),
-            Poll::Pending => tracing::debug!("poll_readable returned Poll::Pending"),
+            Poll::Ready(Ok(())) => defmt::debug!("poll_readable returned Poll::Ready(ok)"),
+            Poll::Ready(Err(_)) => defmt::debug!("poll_readable returned Poll::Ready(err)"),
+            Poll::Pending => defmt::debug!("poll_readable returned Poll::Pending"),
         }
         res
     }

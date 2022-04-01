@@ -97,7 +97,7 @@ impl Inner {
 
         loop {
             // If the future is ready, return the output
-            tracing::debug!("Polling `block_on` future");
+            defmt::debug!("Polling `block_on` future");
             if let Poll::Ready(v) = future.as_mut().poll(cx) {
                 return v;
             }
@@ -110,7 +110,7 @@ impl Inner {
             //    we are waiting for them to fire.
             // 2. If there are tasks spawned onto the runtime, we can start processing them
             if self.queue.borrow().is_empty() {
-                tracing::debug!("Parking on epoll");
+                defmt::debug!("Parking on epoll");
                 self.reactor
                     .react(None)
                     .expect("Reactor failed to process events");
@@ -124,10 +124,7 @@ impl Inner {
                 let task = self.queue.borrow_mut().pop_front();
                 match task {
                     Some(task) => {
-                        tracing::debug!(
-                            "Task {}: Popped off executor queue and running",
-                            task.id()
-                        );
+                        defmt::debug!("Task {}: Popped off executor queue and running", task.id());
                         task.run()
                     }
                     None => break,
@@ -155,7 +152,7 @@ impl Spawner {
     //         raw,
     //         _marker: PhantomData,
     //     };
-    //     tracing::debug!("Task {}: Spawned", task.id());
+    //     defmt::debug!("Task {}: Spawned", task.id());
 
     //     // TODO: Figure out what to do here. This may fail. We can probably just
     //     // create a new SpawnError and return that
@@ -177,7 +174,7 @@ impl Spawner {
             raw: ptr,
             _marker: PhantomData,
         };
-        tracing::debug!("Task {}: Spawned", task.id());
+        defmt::debug!("Task {}: Spawned", task.id());
 
         // TODO: Figure out what to do here. This may fail. We can probably just
         // create a new SpawnError and return that
