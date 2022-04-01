@@ -7,9 +7,6 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
     let mut fn_args = f.sig.inputs.clone();
 
     for arg in fn_args.iter_mut() {
-        // if let syn::FnArg::Typed(t) = arg {
-
-        // }
         match arg {
             syn::FnArg::Receiver(_) => {}
             syn::FnArg::Typed(t) => {
@@ -32,13 +29,13 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
 
     quote! {
         #(#attrs)*
-        #visibility fn #fn_name(#fn_args) -> ::chrono::task::RawTask<#impl_ty, ::chrono::runtime::Queue> {
+        #visibility fn #fn_name(#fn_args) -> ::chrono::task::RawTask<#impl_ty, heapless::Arc<::chrono::runtime::RunQueue>> {
             use ::chrono::task::Memory;
             #f
 
             type F = #impl_ty;
 
-            static MEMORY: Memory<F, ::chrono::runtime::Queue> = Memory::alloc();
+            static MEMORY: Memory<F, heapless::Arc<::chrono::runtime::RunQueue>> = Memory::alloc();
             ::chrono::task::RawTask::new(&MEMORY, move || task(#arg_names))
         }
     }.into()

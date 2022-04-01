@@ -3,9 +3,9 @@ use core::future::Future;
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use core::mem::MaybeUninit;
 
-use heapless::Deque;
-use std::rc::Rc;
+use heapless::{arc_pool, Arc, Deque};
 
 use super::context;
 use crate::io::reactor::{Handle as IoHandle, Reactor};
@@ -26,7 +26,7 @@ struct Inner {
     /// IO reactor
     reactor: Reactor,
     /// Queue that holds tasks
-    queue: Queue,
+    queue: Arc<RunQueue>,
 }
 
 /// Handle to the runtime
@@ -40,17 +40,36 @@ pub struct Handle {
 
 #[derive(Clone)]
 pub struct Spawner {
-    queue: Queue,
+    queue: Arc<RunQueue>,
 }
 
-// Right now, we've decided to fix the capacity
-pub type Queue = Rc<RefCell<Deque<Task, MAX_NUM_TASKS>>>;
+pub type Queue = RefCell<Deque<Task, MAX_NUM_TASKS>>;
+// Declare a memory pool to hold the reference-counted queues. We're
+// using Arc even though it's a single-threaded executor, because there's
+// no good static Rc implementation and I'm not interested in writing it
+// myself lmao.
+arc_pool!(RunQueue: Queue);
 
 // ===== impl Runtime =====
 
 impl Runtime {
     pub fn new() -> Runtime {
-        let queue = Rc::new(RefCell::new(Deque::new()));
+        // How we calculate the size:
+        //   1. The size of the queue itself
+        //   2. The size of pointers (for the reference counts). We need two: one that
+        //      is stored in the runtime [Handle] and one in [Spawner]. And we need one
+        //      for each task as each task stores a pointer to the queue
+        const SIZE: usize = {
+            let arc_size = core::mem::size_of::<Arc<RunQueue>>();
+            let queue_size = core::mem::size_of::<Queue>();
+            queue_size + ((MAX_NUM_TASKS + 2) * arc_size)
+        };
+        static mut MEMORY: [u8; SIZE] = [0; SIZE];
+
+        // No unsafe in docs, maybe don't need it?
+        unsafe { RunQueue::grow(&mut MEMORY) };
+
+        let queue: Arc<RunQueue> = RunQueue::alloc(RefCell::new(Deque::new())).ok().expect("oom");
         let spawner = Spawner {
             queue: queue.clone(),
         };
@@ -75,7 +94,7 @@ impl Runtime {
     }
 
     // Spawn a task onto the runtime
-    pub fn spawn<F: Future>(&self, raw: RawTask<F, Queue>) -> JoinHandle<F::Output> {
+    pub fn spawn<F: Future>(&self, raw: RawTask<F, Arc<RunQueue>>) -> JoinHandle<F::Output> {
         self.handle.spawn(raw)
     }
 
@@ -137,7 +156,7 @@ impl Inner {
 // ===== impl Handle =====
 
 impl Handle {
-    pub fn spawn<F: Future>(&self, raw: RawTask<F, Queue>) -> JoinHandle<F::Output> {
+    pub fn spawn<F: Future>(&self, raw: RawTask<F, Arc<RunQueue>>) -> JoinHandle<F::Output> {
         self.spawner.spawn(raw)
     }
 }
@@ -145,24 +164,7 @@ impl Handle {
 // ===== impl Spawner =====
 
 impl Spawner {
-    // pub fn spawn<F: Future>(&self, future: F) -> JoinHandle<F::Output> {
-    //     let raw = RawTask::new(future, self.queue.clone());
-    //     let task = Task { raw };
-    //     let join_handle = JoinHandle {
-    //         raw,
-    //         _marker: PhantomData,
-    //     };
-    //     defmt::debug!("Task {}: Spawned", task.id());
-
-    //     // TODO: Figure out what to do here. This may fail. We can probably just
-    //     // create a new SpawnError and return that
-    //     let _ = self.queue.schedule(task);
-
-    //     join_handle
-    // }
-
-    // We're using Memory<_, Queue> because we know Queue implements S
-    pub fn spawn<F: Future>(&self, raw: RawTask<F, Queue>) -> JoinHandle<F::Output> {
+    pub fn spawn<F: Future>(&self, raw: RawTask<F, Arc<RunQueue>>) -> JoinHandle<F::Output> {
         // We need to write the scheduler into the RawTask
         let memory = raw.memory();
         unsafe { memory.scheduler.write(self.queue.clone()) }
@@ -186,7 +188,7 @@ impl Spawner {
 
 // ===== impl Queue =====
 
-impl Schedule for Queue {
+impl Schedule for Arc<RunQueue> {
     fn schedule(&self, task: Task) -> Result<(), Task> {
         self.borrow_mut().push_back(task)
     }

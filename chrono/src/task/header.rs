@@ -31,7 +31,7 @@ impl Header {
 #[derive(Default)]
 struct Counter(Cell<u64>);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, defmt::Format)]
 pub struct TaskId(u64);
 
 // ===== impl Counter =====
