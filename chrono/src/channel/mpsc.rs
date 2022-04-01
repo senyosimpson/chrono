@@ -10,10 +10,15 @@ use heapless::Deque;
 use super::cell::StaticCell;
 use super::error::{SendError, TryRecvError};
 
+/// Takes a [Channel] and splits it into Sender and Receiver halves. Each
+/// half contains a reference to the channel. This avoids having to use
+/// reference counting explicitly which requires allocations
 pub fn split<T, const N: usize>(chan: &Channel<T, N>) -> (Sender<T, N>, Receiver<T, N>) {
     (Sender { chan }, Receiver { chan })
 }
 
+/// Holds a [Channel]. Really the purpose of this is to create a more pleasant
+/// API when initialising static [Channel]s.
 pub struct ChannelCell<T, const N: usize>(StaticCell<Channel<T, N>>);
 
 impl<T, const N: usize> ChannelCell<T, N> {
@@ -35,17 +40,16 @@ pub struct Receiver<'ch, T, const N: usize> {
 }
 
 pub struct Channel<T, const N: usize> {
-    // Inner state of the channel
     inner: RefCell<Inner<T, N>>,
 }
 
 struct Inner<T, const N: usize> {
-    // queue holding messages
+    // Queue holding messages
     queue: Deque<T, N>,
     // Number of outstanding sender handles. When it drops to
     // zero, we close the sending half of the channel
     tx_count: usize,
-    // state of the channel
+    // State of the channel
     state: State,
     // Waker notified when items are pushed into the channel
     rx_waker: Option<Waker>,
@@ -59,8 +63,6 @@ enum State {
 // ==== impl Sender =====
 
 impl<'ch, T, const N: usize> Sender<'ch, T, N> {
-    // This does not need to be async as sending to an unbounded queue
-    // will never block
     pub fn send(&self, message: T) -> Result<(), SendError<T>> {
         self.chan.send(message)
     }
