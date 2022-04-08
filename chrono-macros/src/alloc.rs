@@ -41,7 +41,6 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
     let fn_ret = {
         match f.sig.output.clone() {
             ReturnType::Default => {
-                let ret = ReturnType::Default;
                 quote!(::chrono::task::RawTask<#impl_ty, (), heapless::Arc<::chrono::runtime::RunQueue>>)
             }
             ReturnType::Type(_, ret) => {
@@ -53,7 +52,6 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
     let memory_type = {
         match f.sig.output.clone() {
             ReturnType::Default => {
-                let ret = ReturnType::Default;
                 quote!(Memory<F, (), heapless::Arc<::chrono::runtime::RunQueue>>)
             }
             ReturnType::Type(_, ret) => {
