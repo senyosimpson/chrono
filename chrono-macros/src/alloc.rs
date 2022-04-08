@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{token::Default, ReturnType};
+use syn::ReturnType;
 
 pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
     let mut arg_names: syn::punctuated::Punctuated<syn::Ident, syn::Token![,]> =
@@ -30,8 +30,7 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
     let impl_ty = {
         match f.sig.output.clone() {
             ReturnType::Default => {
-                let ret = ReturnType::Default;
-                quote!(impl ::core::future::Future<Output = #ret>)
+                quote!(impl ::core::future::Future<Output = ()>)
             }
             ReturnType::Type(_, ret) => {
                 quote!(impl ::core::future::Future<Output = #ret>)
@@ -39,17 +38,43 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
         }
     };
 
+    let fn_ret = {
+        match f.sig.output.clone() {
+            ReturnType::Default => {
+                let ret = ReturnType::Default;
+                quote!(::chrono::task::RawTask<#impl_ty, (), heapless::Arc<::chrono::runtime::RunQueue>>)
+            }
+            ReturnType::Type(_, ret) => {
+                quote!(::chrono::task::RawTask<#impl_ty, #ret, heapless::Arc<::chrono::runtime::RunQueue>>)
+            }
+        }
+    };
+
+    let memory_type = {
+        match f.sig.output.clone() {
+            ReturnType::Default => {
+                let ret = ReturnType::Default;
+                quote!(Memory<F, (), heapless::Arc<::chrono::runtime::RunQueue>>)
+            }
+            ReturnType::Type(_, ret) => {
+                quote!(Memory<F, #ret, heapless::Arc<::chrono::runtime::RunQueue>>)
+            }
+        }
+    };
+
     quote! {
         #(#attrs)*
-        #visibility fn #fn_name(#fn_args) -> ::chrono::task::RawTask<#impl_ty, u8, heapless::Arc<::chrono::runtime::RunQueue>> {
-            use ::chrono::task::Memory; 
+        #visibility fn #fn_name(#fn_args) -> #fn_ret {
+            use ::chrono::task::Memory;
 
             #f
 
             type F = #impl_ty;
 
-            static MEMORY: Memory<F, u8, heapless::Arc<::chrono::runtime::RunQueue>> = Memory::alloc();
+            // static MEMORY: Memory<F, u8, heapless::Arc<::chrono::runtime::RunQueue>> = Memory::alloc();
+            static MEMORY: #memory_type = Memory::alloc();
             ::chrono::task::RawTask::new(&MEMORY, move || task(#arg_names))
         }
-    }.into()
+    }
+    .into()
 }
