@@ -1,9 +1,7 @@
 #![feature(generic_associated_types, type_alias_impl_trait)]
+#![no_std]
 
 pub mod channel;
-pub mod io;
-pub mod net;
-pub mod time;
 
 pub mod runtime;
 pub use runtime::Runtime;

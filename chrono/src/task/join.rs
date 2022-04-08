@@ -14,7 +14,7 @@ pub struct JoinHandle<T> {
 }
 
 impl<T> Future for JoinHandle<T> {
-    type Output = super::Result<T>;
+    type Output = T;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let raw = self.raw.as_ptr();

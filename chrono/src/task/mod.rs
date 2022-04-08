@@ -9,9 +9,6 @@ pub use join::JoinHandle;
 mod raw;
 pub use raw::{Memory, RawTask, Schedule};
 
-mod result;
-pub(crate) use result::Result;
-
 mod spawn;
 pub use spawn::spawn;
 

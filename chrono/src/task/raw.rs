@@ -5,10 +5,7 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
-use std::panic;
-
 use super::cell::UninitCell;
-use super::error::JoinError;
 use super::header::{Header, TaskId};
 use super::state::State;
 use super::task::Task;
@@ -38,7 +35,7 @@ pub struct RawTask<F: Future<Output = T>, T, S> {
 
 pub enum Status<F: Future<Output = T>, T> {
     Running(F),
-    Finished(super::Result<T>),
+    Finished(T),
     Consumed,
 }
 
@@ -254,53 +251,26 @@ where
             }
             Poll::Ready(_) => {
                 header.state.transition_to_complete();
-                // Catch a panic if waking the JoinHandle or dropping the future
-                // panics. Since the task is already completed, we're not concerned
-                // about propagating the failure up to the caller
-                let _ = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                    if header.state.has_join_waker() {
-                        header.wake_join_handle();
-                    } else {
-                        // Drop the future or output by replacing it with Consumed
-                        status.drop_future_or_output();
-                    }
-                }));
+                if header.state.has_join_waker() {
+                    header.wake_join_handle();
+                } else {
+                    // Drop the future or output by replacing it with Consumed
+                    status.drop_future_or_output();
+                }
             }
         }
     }
 
     fn poll_inner(status: &mut Status<F, T>, cx: &mut Context) -> Poll<()> {
-        struct Guard<'a, F: Future<Output = T>, T> {
-            status: &'a mut Status<F, T>,
-        }
-
-        impl<'a, F: Future<Output = T>, T> Drop for Guard<'a, F, T> {
-            fn drop(&mut self) {
-                // If polling the future panics, we want to drop the future/output
-                // If dropping the future/output panics, we've wrapped the entire method in
-                // a panic::catch_unwind so we can return a JoinError
-                self.status.drop_future_or_output()
-            }
-        }
-
-        let res = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-            let guard = Guard { status };
-            let res = guard.status.poll(cx);
-            // Successfully polled the future. Prevent the guard's destructor from running
-            mem::forget(guard);
-            res
-        }));
+        let res = status.poll(cx);
 
         let output = match res {
-            Ok(Poll::Pending) => return Poll::Pending,
-            Ok(Poll::Ready(output)) => Ok(output),
-            Err(panic) => Err(JoinError::Panic(panic)),
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(output) => output,
         };
 
-        // Store output in task. Ignore if the future panics on drop
-        let _ = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-            *status = Status::Finished(output);
-        }));
+        // Store output in task
+        *status = Status::Finished(output);
 
         Poll::Ready(())
     }
@@ -309,7 +279,7 @@ where
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
         let status = memory.mut_status();
-        let dst = dst as *mut Poll<super::Result<F::Output>>;
+        let dst = dst as *mut Poll<F::Output>;
         // TODO: Improve error handling
         match mem::replace(status, Status::Consumed) {
             Status::Finished(output) => {

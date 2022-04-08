@@ -2,7 +2,6 @@ use core::cell::RefCell;
 
 use super::runtime::Handle;
 use super::runtime::Spawner;
-use crate::io::reactor::Handle as IoHandle;
 
 static CONTEXT: Context = Context::new();
 
@@ -16,13 +15,6 @@ unsafe impl Sync for Context {}
 impl Context {
     const fn new() -> Context {
         Context(RefCell::new(None))
-    }
-
-    fn io(&self) -> IoHandle {
-        let inner = self.0.borrow();
-        let handle = inner.as_ref().expect("No reactor running");
-        // let handle = inner.get().expect("No reactor running");
-        handle.io.clone()
     }
 
     fn spawner(&self) -> Spawner {
@@ -58,10 +50,6 @@ pub(super) fn enter(new: Handle) -> EnterGuard {
 }
 
 // ===== Functions for retrieving handles =====
-
-pub(crate) fn io() -> IoHandle {
-    CONTEXT.io()
-}
 
 pub(crate) fn spawner() -> Spawner {
     CONTEXT.spawner()
