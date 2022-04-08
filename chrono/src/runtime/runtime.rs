@@ -1,9 +1,9 @@
 use core::cell::RefCell;
 use core::future::Future;
 use core::marker::PhantomData;
+use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-use core::mem::MaybeUninit;
 
 use heapless::{arc_pool, Arc, Deque};
 
@@ -69,7 +69,9 @@ impl Runtime {
         // No unsafe in docs, maybe don't need it?
         unsafe { RunQueue::grow(&mut MEMORY) };
 
-        let queue: Arc<RunQueue> = RunQueue::alloc(RefCell::new(Deque::new())).ok().expect("oom");
+        let queue: Arc<RunQueue> = RunQueue::alloc(RefCell::new(Deque::new()))
+            .ok()
+            .expect("oom");
         let spawner = Spawner {
             queue: queue.clone(),
         };
@@ -94,7 +96,10 @@ impl Runtime {
     }
 
     // Spawn a task onto the runtime
-    pub fn spawn<F: Future>(&self, raw: RawTask<F, Arc<RunQueue>>) -> JoinHandle<F::Output> {
+    pub fn spawn<F: Future<Output = T>, T>(
+        &self,
+        raw: RawTask<F, T, Arc<RunQueue>>,
+    ) -> JoinHandle<T> {
         self.handle.spawn(raw)
     }
 
@@ -156,7 +161,10 @@ impl Inner {
 // ===== impl Handle =====
 
 impl Handle {
-    pub fn spawn<F: Future>(&self, raw: RawTask<F, Arc<RunQueue>>) -> JoinHandle<F::Output> {
+    pub fn spawn<F: Future<Output = T>, T>(
+        &self,
+        raw: RawTask<F, T, Arc<RunQueue>>,
+    ) -> JoinHandle<T> {
         self.spawner.spawn(raw)
     }
 }
@@ -164,7 +172,10 @@ impl Handle {
 // ===== impl Spawner =====
 
 impl Spawner {
-    pub fn spawn<F: Future>(&self, raw: RawTask<F, Arc<RunQueue>>) -> JoinHandle<F::Output> {
+    pub fn spawn<F: Future<Output = T>, T>(
+        &self,
+        raw: RawTask<F, T, Arc<RunQueue>>,
+    ) -> JoinHandle<T> {
         // We need to write the scheduler into the RawTask
         let memory = raw.memory();
         unsafe { memory.scheduler.write(self.queue.clone()) }
