@@ -1,5 +1,4 @@
 mod cell;
-mod error;
 
 mod header;
 
