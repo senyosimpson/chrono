@@ -14,7 +14,7 @@ use super::state::State;
 use super::task::Task;
 
 #[repr(C)]
-pub struct Memory<F: Future, S> {
+pub struct Memory<F: Future<Output = T>, T, S> {
     /// Header of the task. Contains data related to the state
     /// of a task
     pub header: UninitCell<Header>,
@@ -24,21 +24,21 @@ pub struct Memory<F: Future, S> {
     pub scheduler: UninitCell<S>,
     /// The status of a task. This is either a future or the
     /// output of a future
-    pub status: UninitCell<Status<F>>,
+    pub status: UninitCell<Status<F, T>>,
 }
 
 // The C representation means we have guarantees on
 // the memory layout of the task
 /// The underlying task containing the core components of a task
-pub struct RawTask<F: Future, S> {
+pub struct RawTask<F: Future<Output = T>, T, S> {
     pub ptr: *mut (),
     pub(crate) _f: PhantomData<F>,
     pub(crate) _s: PhantomData<S>,
 }
 
-pub enum Status<F: Future> {
+pub enum Status<F: Future<Output = T>, T> {
     Running(F),
-    Finished(super::Result<F::Output>),
+    Finished(super::Result<T>),
     Consumed,
 }
 
@@ -56,9 +56,9 @@ pub trait Schedule {
 
 // ===== impl Memory ======
 
-impl<F, S> Memory<F, S>
+impl<F, T, S> Memory<F, T, S>
 where
-    F: Future,
+    F: Future<Output = T>,
     S: Schedule,
 {
     pub const fn alloc() -> Self {
@@ -79,7 +79,7 @@ where
     }
 
     #[allow(dead_code)]
-    unsafe fn status(&self) -> &Status<F> {
+    unsafe fn status(&self) -> &Status<F, T> {
         self.status.as_ref()
     }
 
@@ -88,18 +88,18 @@ where
     }
 
     #[allow(clippy::mut_from_ref)]
-    unsafe fn mut_status(&self) -> &mut Status<F> {
+    unsafe fn mut_status(&self) -> &mut Status<F, T> {
         self.status.as_mut()
     }
 }
 
-unsafe impl<F: Future, S> Sync for Memory<F, S> {}
+unsafe impl<F: Future<Output = T>, T, S> Sync for Memory<F, T, S> {}
 
 // ===== impl RawTask =====
 
-impl<F, S> RawTask<F, S>
+impl<F, T, S> RawTask<F, T, S>
 where
-    F: Future,
+    F: Future<Output = T>,
     S: Schedule,
 {
     // What implication is there for having a const within an impl? Is that the same
@@ -111,7 +111,7 @@ where
         Self::drop_waker,
     );
 
-    pub fn new(memory: &Memory<F, S>, future: impl FnOnce() -> F) -> RawTask<F, S> {
+    pub fn new(memory: &Memory<F, T, S>, future: impl FnOnce() -> F) -> RawTask<F, T, S> {
         let id = TaskId::new();
 
         let header = Header {
@@ -143,8 +143,8 @@ where
         }
     }
 
-    pub(crate) fn memory(&self) -> &Memory<F, S> {
-        unsafe { &*(self.ptr as *const Memory<F, S>) }
+    pub(crate) fn memory(&self) -> &Memory<F, T, S> {
+        unsafe { &*(self.ptr as *const Memory<F, T, S>) }
     }
 
     fn from_ptr(ptr: *const ()) -> Self {
@@ -269,12 +269,12 @@ where
         }
     }
 
-    fn poll_inner(status: &mut Status<F>, cx: &mut Context) -> Poll<()> {
-        struct Guard<'a, F: Future> {
-            status: &'a mut Status<F>,
+    fn poll_inner(status: &mut Status<F, T>, cx: &mut Context) -> Poll<()> {
+        struct Guard<'a, F: Future<Output = T>, T> {
+            status: &'a mut Status<F, T>,
         }
 
-        impl<'a, F: Future> Drop for Guard<'a, F> {
+        impl<'a, F: Future<Output = T>, T> Drop for Guard<'a, F, T> {
             fn drop(&mut self) {
                 // If polling the future panics, we want to drop the future/output
                 // If dropping the future/output panics, we've wrapped the entire method in
@@ -337,7 +337,7 @@ where
 
 // ====== impl Status =====
 
-impl<F: Future> Status<F> {
+impl<F: Future<Output = T>, T> Status<F, T> {
     fn poll(&mut self, cx: &mut Context<'_>) -> Poll<F::Output> {
         let future = match self {
             Status::Running(future) => future,
