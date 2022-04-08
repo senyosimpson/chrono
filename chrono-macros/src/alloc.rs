@@ -69,7 +69,6 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
 
             type F = #impl_ty;
 
-            // static MEMORY: Memory<F, u8, heapless::Arc<::chrono::runtime::RunQueue>> = Memory::alloc();
             static MEMORY: #memory_type = Memory::alloc();
             ::chrono::task::RawTask::new(&MEMORY, move || task(#arg_names))
         }
