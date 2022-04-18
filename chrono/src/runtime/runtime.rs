@@ -88,7 +88,7 @@ impl Runtime {
     pub fn spawn<F: Future<Output = T>, T>(
         &self,
         raw: RawTask<F, T, Arc<RunQueue>>,
-    ) -> JoinHandle<T> {
+    ) -> Result<JoinHandle<T>, SpawnError> {
         self.handle.spawn(raw)
     }
 
@@ -138,18 +138,22 @@ impl Handle {
     pub fn spawn<F: Future<Output = T>, T>(
         &self,
         raw: RawTask<F, T, Arc<RunQueue>>,
-    ) -> JoinHandle<T> {
+    ) -> Result<JoinHandle<T>, SpawnError> {
         self.spawner.spawn(raw)
     }
 }
 
 // ===== impl Spawner =====
 
+pub enum SpawnError {
+    QueueFull
+}
+
 impl Spawner {
     pub fn spawn<F: Future<Output = T>, T>(
         &self,
         raw: RawTask<F, T, Arc<RunQueue>>,
-    ) -> JoinHandle<T> {
+    ) -> Result<JoinHandle<T>, SpawnError> {
         // We need to write the scheduler into the RawTask
         let memory = raw.memory();
         unsafe { memory.scheduler.write(self.queue.clone()) }
@@ -165,9 +169,12 @@ impl Spawner {
 
         // TODO: Figure out what to do here. This may fail. We can probably just
         // create a new SpawnError and return that
-        let _ = self.queue.schedule(task);
+        let spawned = self.queue.schedule(task);
+        if spawned.is_err() {
+            return Err(SpawnError::QueueFull)
+        }
 
-        join_handle
+        Ok(join_handle)
     }
 }
 
