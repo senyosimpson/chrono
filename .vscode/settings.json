@@ -1,23 +1,29 @@
 {
   "rust-analyzer.checkOnSave.overrideCommand": [
-      "cargo",
-      "clippy",
-      "--all-targets",
-      "--message-format=json",
-      "--",
-      "--allow=clippy::module_inception",
-      "--allow=clippy::new_ret_no_self",
-      "--allow=clippy::zero_ptr",
-      "--allow=clippy::new_without_default",
+    "cargo",
+    "clippy",
+    "--message-format=json",
+    "--target",
+    "thumbv7em-none-eabihf",
+    "--",
+    "--allow=clippy::module_inception",
+    "--allow=clippy::new_ret_no_self",
+    "--allow=clippy::zero_ptr",
+    "--allow=clippy::new_without_default",
+  ],
+  "rust-analyzer.checkOnSave.allTargets": false,
+  "rust-analyzer.cargo.target": "thumbv7em-none-eabihf",
+  "rust-analyzer.checkOnSave.extraArgs": [
+    "--target",
+    "thumbv7m-none-eabihf"
   ],
   "markdownlint.config": {
-    
-      "MD013": {
-        "line_length": 100
-      },
-      "MD034": false,
-      "MD040": false,
-      "MD024": false,
-      "MD033": false
+    "MD013": {
+      "line_length": 100
     },
+    "MD034": false,
+    "MD040": false,
+    "MD024": false,
+    "MD033": false
+  },
 }
