@@ -4,7 +4,7 @@
 use core::cell::RefCell;
 use core::task::{Context, Poll, Waker};
 
-use futures::future::poll_fn;
+use futures_util::future::poll_fn;
 use heapless::Deque;
 
 use super::cell::StaticCell;

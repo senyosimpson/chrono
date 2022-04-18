@@ -13,5 +13,5 @@ pub use task::Task;
 // Re-exports
 pub use chrono_macros::alloc;
 
-pub use futures::join;
-pub use futures::pin_mut as pin;
+pub use futures_util::join;
+pub use futures_util::pin_mut as pin;

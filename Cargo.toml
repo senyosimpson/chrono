@@ -3,5 +3,5 @@
 members = [
     "chrono",
     "chrono-macros",
-    "examples"
+    "examples",
 ]

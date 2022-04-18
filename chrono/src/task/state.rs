@@ -190,6 +190,22 @@ impl core::fmt::Display for State {
     }
 }
 
+impl defmt::Format for State {
+    fn format(&self, f: defmt::Formatter) {
+        let scheduled = self.is_scheduled();
+        let running = self.state & RUNNING == RUNNING;
+        let complete = self.is_complete();
+        let join_handle = self.state & JOIN_HANDLE == JOIN_HANDLE;
+        let join_waker = self.has_join_waker();
+        let ref_count = self.ref_count();
+        defmt::write!(
+            f,
+            "State {{ scheduled={}, running={}, complete={}, has_join_handle={}, has_join_waker={}, ref_count={} }}",
+            scheduled, running, complete, join_handle, join_waker, ref_count
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
