@@ -23,7 +23,7 @@ impl<T> Future for JoinHandle<T> {
         unsafe {
             let header = &mut *(raw as *mut Header);
 
-            let id = header.id;
+            let id = header.task.id;
             defmt::debug!(
                 "Task {}: JoinHandle is complete: {}",
                 id,
@@ -50,7 +50,7 @@ impl<T> Drop for JoinHandle<T> {
         let header = raw as *mut Header;
 
         unsafe {
-            defmt::debug!("Task {}: Dropping JoinHandle", ((*header).id));
+            defmt::debug!("Task {}: Dropping JoinHandle", ((*header).task.id));
             ((*header).vtable.drop_join_handle)(self.raw.as_ptr())
         }
     }

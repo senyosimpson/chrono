@@ -5,9 +5,10 @@ use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
-use heapless::{arc_pool, Arc, Deque};
+use heapless::{arc_pool, Arc};
 
 use super::context;
+use super::queue::Queue;
 use crate::task::join::JoinHandle;
 use crate::task::Task;
 use crate::task::{RawTask, Schedule};
@@ -40,12 +41,11 @@ pub struct Spawner {
     queue: Arc<RunQueue>,
 }
 
-pub type Queue = RefCell<Deque<Task, MAX_NUM_TASKS>>;
 // Declare a memory pool to hold the reference-counted queues. We're
 // using Arc even though it's a single-threaded executor, because there's
 // no good static Rc implementation and I'm not interested in writing it
 // myself lmao.
-arc_pool!(RunQueue: Queue);
+arc_pool!(RunQueue: RefCell<Queue>);
 
 // ===== impl Runtime =====
 
@@ -66,7 +66,7 @@ impl Runtime {
         // No unsafe in docs, maybe don't need it?
         unsafe { RunQueue::grow(&mut MEMORY) };
 
-        let queue: Arc<RunQueue> = RunQueue::alloc(RefCell::new(Deque::new()))
+        let queue: Arc<RunQueue> = RunQueue::alloc(RefCell::new(Queue::new()))
             .ok()
             .expect("oom");
         let spawner = Spawner {
@@ -117,12 +117,13 @@ impl Inner {
 
             // TODO: Block if we are waiting on something, waiting for the waker
             // to call and unblock
-
+            
+            let mut queue = self.queue.borrow_mut();
             loop {
-                let task = self.queue.borrow_mut().pop_front();
+                let task = queue.pop();
                 match task {
                     Some(task) => {
-                        defmt::debug!("Task {}: Popped off executor queue and running", task.id());
+                        defmt::debug!("Task {}: Popped off executor queue and running", task.id);
                         task.run()
                     }
                     None => break,
@@ -156,20 +157,21 @@ impl Spawner {
     ) -> Result<JoinHandle<T>, SpawnError> {
         // We need to write the scheduler into the RawTask
         let memory = raw.memory();
+        let task = &memory.task();
+        let task_ptr = task as *const _ as *mut Task;
+
         unsafe { memory.scheduler.write(self.queue.clone()) }
 
+        // pointer to Memory inside of RawTask
         let ptr = unsafe { NonNull::new_unchecked(raw.ptr) };
 
-        let task = Task { raw: ptr };
         let join_handle = JoinHandle {
             raw: ptr,
             _marker: PhantomData,
         };
-        defmt::debug!("Task {}: Spawned", task.id());
+        defmt::debug!("Task {}: Spawned", task.id);
 
-        // TODO: Figure out what to do here. This may fail. We can probably just
-        // create a new SpawnError and return that
-        let spawned = self.queue.schedule(task);
+        let spawned = self.queue.schedule(task_ptr);
         if spawned.is_err() {
             return Err(SpawnError::QueueFull)
         }
@@ -181,8 +183,9 @@ impl Spawner {
 // ===== impl Queue =====
 
 impl Schedule for Arc<RunQueue> {
-    fn schedule(&self, task: Task) -> Result<(), Task> {
-        self.borrow_mut().push_back(task)
+    fn schedule(&self, task: *mut Task) -> Result<(), ()> {
+        self.borrow_mut().insert(task);
+        Ok(())
     }
 }
 
