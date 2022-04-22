@@ -112,8 +112,10 @@ impl Inner {
             // If the future is ready, return the output
             defmt::debug!("Polling `block_on` future");
             if let Poll::Ready(v) = future.as_mut().poll(cx) {
+                defmt::debug!("`block_on` future ready");
                 return v;
             }
+            defmt::debug!("`block_on` future pending");
 
             // TODO: Block if we are waiting on something, waiting for the waker
             // to call and unblock
@@ -157,7 +159,7 @@ impl Spawner {
     ) -> Result<JoinHandle<T>, SpawnError> {
         // We need to write the scheduler into the RawTask
         let memory = raw.memory();
-        let task = &memory.task();
+        let task = memory.task();
         let task_ptr = task as *const _ as *mut Task;
 
         unsafe { memory.scheduler.write(self.queue.clone()) }
