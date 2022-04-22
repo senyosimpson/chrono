@@ -6,7 +6,7 @@ use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use super::cell::UninitCell;
-use super::header::{Header, TaskId};
+use super::header::Header;
 use super::state::State;
 use super::task::Task;
 
@@ -48,7 +48,7 @@ pub struct TaskVTable {
 // All schedulers must implement the Schedule trait. They
 // are responsible for sending tasks to the runtime queue
 pub trait Schedule {
-    fn schedule(&self, task: Task) -> Result<(), Task>;
+    fn schedule(&self, task: *mut Task) -> Result<(), ()>;
 }
 
 // ===== impl Memory ======
@@ -68,6 +68,10 @@ where
 
     fn header(&self) -> &Header {
         unsafe { self.header.as_ref() }
+    }
+
+    pub fn task(&self) -> &Task {
+        &self.header().task
     }
 
     #[allow(clippy::mut_from_ref)]
@@ -109,11 +113,14 @@ where
     );
 
     pub fn new(memory: &Memory<F, T, S>, future: impl FnOnce() -> F) -> RawTask<F, T, S> {
-        let id = TaskId::new();
+        let ptr = memory as *const _ as *mut ();
+
+        let task = Task::new(unsafe { NonNull::new_unchecked(ptr) });
+        let task_id = task.id;
 
         let header = Header {
-            id,
-            state: State::new_with_id(id),
+            task: task,
+            state: State::new_with_id(task_id),
             waker: None,
             vtable: &TaskVTable {
                 poll: Self::poll,
@@ -129,10 +136,6 @@ where
         let status = Status::Running(future());
         unsafe { memory.status.write(status) };
 
-        // let ptr =  unsafe { NonNull::new_unchecked(memory as *const _ as *mut ()) };
-        // let ptr = memory as *const _;
-
-        let ptr = memory as *const _ as *mut ();
         RawTask {
             ptr,
             _f: PhantomData,
@@ -158,8 +161,8 @@ where
     pub unsafe fn dealloc(ptr: *const ()) {
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
-        let header = memory.header();
-        defmt::debug!("Task {}: Deallocating", header.id);
+        let task = memory.task();
+        defmt::debug!("Task {}: Deallocating", task.id);
     }
 
     // Makes a clone of the waker
@@ -193,7 +196,9 @@ where
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
         let header = memory.mut_header();
-        defmt::debug!("Task {}: Waking raw task", header.id);
+
+        let task = memory.task();
+        defmt::debug!("Task {}: Waking raw task", task.id);
 
         header.state.transition_to_scheduled();
         // We get one reference count from the caller. We schedule a task which
@@ -207,7 +212,9 @@ where
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
         let header = memory.mut_header();
-        defmt::debug!("Task {}: Waking raw task by ref", header.id);
+
+        let task = memory.task();
+        defmt::debug!("Task {}: Waking raw task by ref", task.id);
 
         header.state.transition_to_scheduled();
         Self::schedule(ptr);
@@ -218,18 +225,17 @@ where
         let memory = raw.memory();
         let header = memory.mut_header();
 
-        let task = Task {
-            raw: NonNull::new_unchecked(ptr as *mut ()),
-        };
+        // header.task.set(NonNull::new_unchecked(ptr as *mut ()));
         // When we create a new task, we need to increment its reference
         // count since we now have another 'thing' holding a reference
         // to the raw task
         header.state.ref_incr();
 
+        let task_ptr = &memory.task() as *const _ as *mut Task;
         let scheduler = memory.scheduler();
         // TODO We need to store that a task failed to be scheduled in the
         // state or something of that kind
-        let _ = scheduler.schedule(task);
+        let _ = scheduler.schedule(task_ptr);
     }
 
     // Runs the future and updates its state
