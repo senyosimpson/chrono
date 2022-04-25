@@ -1,4 +1,4 @@
-use core::cell::RefCell;
+use core::cell::Cell;
 
 use super::runtime::Handle;
 use super::runtime::Spawner;
@@ -6,26 +6,26 @@ use super::runtime::Spawner;
 static CONTEXT: Context = Context::new();
 
 #[derive(Clone)]
-pub(crate) struct Context(RefCell<Option<Handle>>);
+pub(crate) struct Context(Cell<Option<Handle>>);
 
 // Since we are in a single-threaded environment, it is safe to implement
-// this trait this even though the OnceCell we are using is not thread safe
+// this trait this even though the Cell we are using is not thread safe
 unsafe impl Sync for Context {}
 
 impl Context {
     const fn new() -> Context {
-        Context(RefCell::new(None))
+        Context(Cell::new(None))
     }
 
     fn spawner(&self) -> Spawner {
-        let inner = self.0.borrow();
+        let inner = self.0.get();
         let handle = inner.as_ref().expect("No reactor running");
-        handle.spawner.clone()
+        handle.spawner
     }
 
     fn with<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&RefCell<Option<Handle>>) -> R,
+        F: FnOnce(&Cell<Option<Handle>>) -> R,
     {
         f(&self.0)
     }
@@ -37,7 +37,7 @@ impl Drop for EnterGuard {
     fn drop(&mut self) {
         defmt::debug!("Dropping enter guard");
         CONTEXT.with(|ctx| {
-            ctx.borrow_mut().take();
+            ctx.get().take();
         })
     }
 }
@@ -45,7 +45,7 @@ impl Drop for EnterGuard {
 /// Sets this [`Handle`] as the current [`Handle`]. Returns an
 /// [`EnterGuard`] which clears thread local storage once dropped
 pub(super) fn enter(new: Handle) -> EnterGuard {
-    CONTEXT.with(|ctx| ctx.borrow_mut().replace(new));
+    CONTEXT.with(|ctx| ctx.replace(Some(new)));
     EnterGuard {}
 }
 

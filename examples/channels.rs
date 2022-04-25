@@ -27,6 +27,7 @@ async fn receive(rx: Receiver<'static, &str, CHAN_SIZE>) {
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let rt = Runtime::new();
+    rt.q();
     rt.block_on(async {
         let channel = CHANNEL.set(mpsc::Channel::new());
         let (tx, rx) = mpsc::split(channel);

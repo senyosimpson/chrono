@@ -2,13 +2,16 @@ use core::ptr;
 
 use crate::task::Task;
 
+#[derive(Debug, Clone, Copy)]
 pub struct Queue {
-    head: *mut Task,
-    tail: *mut Task,
+    pub head: *mut Task,
+    pub tail: *mut Task,
 }
 
+unsafe impl Sync for Queue {}
+
 impl Queue {
-    pub fn new() -> Queue {
+    pub const fn new() -> Queue {
         Queue {
             head: ptr::null_mut(),
             tail: ptr::null_mut(),
@@ -16,16 +19,29 @@ impl Queue {
     }
 
     pub fn insert(&mut self, task: *mut Task) {
+        defmt::debug!("Inserting into list: Task {}", task);
+        defmt::debug!("Head ptr: {}", self.head);
+        defmt::debug!("Tail ptr: {}", self.tail);
+
         if self.head.is_null() {
+            defmt::debug!("Head is null. Setting node to head and tail");
             self.head = task;
             self.tail = task;
         } else {
+            defmt::debug!("Head exists. Setting next in current tail to the new task and the new task as the tail");
             unsafe { (*self.tail).next = task };
             self.tail = task;
         }
+
+        defmt::debug!("Inserted into list");
+        defmt::debug!("Head ptr: {}", self.head);
+        defmt::debug!("Tail ptr: {}", self.tail);
     }
 
     pub fn pop(&mut self) -> Option<&Task> {
+        defmt::debug!("Popping from list");
+        defmt::debug!("Head ptr: {}", self.head);
+        defmt::debug!("Tail ptr: {}", self.tail);
         // If self.head is None, it means we don't have anything
         // in the queue
         if self.head.is_null() {
@@ -48,3 +64,9 @@ impl Queue {
         }
     }
 }
+
+// impl Drop for Queue {
+//     fn drop(&mut self) {
+//         defmt::debug!("Queue dropped!");
+//     }
+// }
