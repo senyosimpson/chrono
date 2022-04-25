@@ -1,3 +1,4 @@
+use core::cell::RefCell;
 use core::future::Future;
 use core::marker::PhantomData;
 use core::mem;
@@ -5,20 +6,22 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
+use crate::runtime::queue::Queue;
+
 use super::cell::UninitCell;
 use super::header::Header;
 use super::state::State;
 use super::task::Task;
 
 #[repr(C)]
-pub struct Memory<F: Future<Output = T>, T, S> {
+pub struct Memory<F: Future<Output = T>, T> {
     /// Header of the task. Contains data related to the state
     /// of a task
     pub header: UninitCell<Header>,
     /// Scheduler is responsible for scheduling tasks onto the
     /// runtime. When a task is woken, it calls the related
     /// scheduler to schedule itself
-    pub scheduler: UninitCell<S>,
+    pub scheduler: RefCell<*mut Queue>,
     /// The status of a task. This is either a future or the
     /// output of a future
     pub status: UninitCell<Status<F, T>>,
@@ -27,10 +30,9 @@ pub struct Memory<F: Future<Output = T>, T, S> {
 // The C representation means we have guarantees on
 // the memory layout of the task
 /// The underlying task containing the core components of a task
-pub struct RawTask<F: Future<Output = T>, T, S> {
+pub struct RawTask<F: Future<Output = T>, T> {
     pub ptr: *mut (),
     pub(crate) _f: PhantomData<F>,
-    pub(crate) _s: PhantomData<S>,
 }
 
 pub enum Status<F: Future<Output = T>, T> {
@@ -53,15 +55,14 @@ pub trait Schedule {
 
 // ===== impl Memory ======
 
-impl<F, T, S> Memory<F, T, S>
+impl<F, T> Memory<F, T>
 where
     F: Future<Output = T>,
-    S: Schedule,
 {
     pub const fn alloc() -> Self {
         Memory {
             header: UninitCell::uninit(),
-            scheduler: UninitCell::uninit(),
+            scheduler: RefCell::new(core::ptr::null_mut()),
             status: UninitCell::uninit(),
         }
     }
@@ -84,9 +85,9 @@ where
         self.status.as_ref()
     }
 
-    unsafe fn scheduler(&self) -> &S {
-        self.scheduler.as_ref()
-    }
+    // unsafe fn scheduler(&self) -> *mut Queue {
+    //     self.scheduler
+    // }
 
     #[allow(clippy::mut_from_ref)]
     unsafe fn mut_status(&self) -> &mut Status<F, T> {
@@ -94,14 +95,13 @@ where
     }
 }
 
-unsafe impl<F: Future<Output = T>, T, S> Sync for Memory<F, T, S> {}
+unsafe impl<F: Future<Output = T>, T> Sync for Memory<F, T> {}
 
 // ===== impl RawTask =====
 
-impl<F, T, S> RawTask<F, T, S>
+impl<F, T> RawTask<F, T>
 where
     F: Future<Output = T>,
-    S: Schedule,
 {
     // What implication is there for having a const within an impl? Is that the same
     // as having it outside?
@@ -112,7 +112,7 @@ where
         Self::drop_waker,
     );
 
-    pub fn new(memory: &Memory<F, T, S>, future: impl FnOnce() -> F) -> RawTask<F, T, S> {
+    pub fn new(memory: &Memory<F, T>, future: impl FnOnce() -> F) -> RawTask<F, T> {
         let ptr = memory as *const _ as *mut ();
 
         let task = Task::new(unsafe { NonNull::new_unchecked(ptr) });
@@ -139,12 +139,11 @@ where
         RawTask {
             ptr,
             _f: PhantomData,
-            _s: PhantomData,
         }
     }
 
-    pub(crate) fn memory(&self) -> &Memory<F, T, S> {
-        unsafe { &*(self.ptr as *const Memory<F, T, S>) }
+    pub(crate) fn memory(&self) -> &Memory<F, T> {
+        unsafe { &*(self.ptr as *const Memory<F, T>) }
     }
 
     fn from_ptr(ptr: *const ()) -> Self {
@@ -152,7 +151,6 @@ where
         Self {
             ptr,
             _f: PhantomData,
-            _s: PhantomData,
         }
     }
 
@@ -231,11 +229,12 @@ where
         // to the raw task
         header.state.ref_incr();
 
-        let task_ptr = &memory.task() as *const _ as *mut Task;
-        let scheduler = memory.scheduler();
+        let task_ptr = memory.task() as *const _ as *mut Task;
+        // let scheduler = &mut (*memory.scheduler());
+        let scheduler = memory.scheduler.borrow_mut();
         // TODO We need to store that a task failed to be scheduled in the
         // state or something of that kind
-        let _ = scheduler.schedule(task_ptr);
+        let _ = scheduler.as_mut().unwrap().insert(task_ptr);
     }
 
     // Runs the future and updates its state

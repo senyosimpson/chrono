@@ -41,10 +41,12 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
     let fn_ret = {
         match f.sig.output.clone() {
             ReturnType::Default => {
-                quote!(::chrono::task::RawTask<#impl_ty, (), heapless::Arc<::chrono::runtime::RunQueue>>)
+                // quote!(::chrono::task::RawTask<#impl_ty, (), *mut ::chrono::runtime::queue::Queue>)
+                quote!(::chrono::task::RawTask<#impl_ty, ()>)
             }
             ReturnType::Type(_, ret) => {
-                quote!(::chrono::task::RawTask<#impl_ty, #ret, heapless::Arc<::chrono::runtime::RunQueue>>)
+                // quote!(::chrono::task::RawTask<#impl_ty, #ret, *mut ::chrono::runtime::queue::Queue>)
+                quote!(::chrono::task::RawTask<#impl_ty, #ret>)
             }
         }
     };
@@ -52,10 +54,12 @@ pub(super) fn alloc(mut f: syn::ItemFn) -> TokenStream {
     let memory_type = {
         match f.sig.output.clone() {
             ReturnType::Default => {
-                quote!(Memory<F, (), heapless::Arc<::chrono::runtime::RunQueue>>)
+                // quote!(Memory<F, (), *mut ::chrono::runtime::queue::Queue>)
+                quote!(Memory<F, ()>)
             }
             ReturnType::Type(_, ret) => {
-                quote!(Memory<F, #ret, heapless::Arc<::chrono::runtime::RunQueue>>)
+                // quote!(Memory<F, #ret, *mut ::chrono::runtime::queue::Queue>)
+                quote!(Memory<F, #ret>)
             }
         }
     };

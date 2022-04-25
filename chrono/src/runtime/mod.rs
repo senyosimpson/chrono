@@ -1,6 +1,6 @@
 pub(crate) mod context;
 
 mod runtime;
-pub use runtime::{RunQueue, Runtime, SpawnError};
+pub use runtime::{Runtime, SpawnError};
 
-mod queue;
+pub mod queue;

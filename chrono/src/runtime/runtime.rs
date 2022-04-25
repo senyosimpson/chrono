@@ -1,19 +1,14 @@
 use core::cell::RefCell;
 use core::future::Future;
 use core::marker::PhantomData;
-use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-
-use heapless::{arc_pool, Arc};
 
 use super::context;
 use super::queue::Queue;
 use crate::task::join::JoinHandle;
+use crate::task::RawTask;
 use crate::task::Task;
-use crate::task::{RawTask, Schedule};
-
-const MAX_NUM_TASKS: usize = 1024;
 
 pub struct Runtime {
     // Holds the task queue
@@ -24,59 +19,68 @@ pub struct Runtime {
 
 struct Inner {
     /// Queue that holds tasks
-    queue: Arc<RunQueue>,
+    queue: *mut Queue,
 }
 
 /// Handle to the runtime
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Handle {
     /// Spawner responsible for spawning tasks onto the executor
     pub(crate) spawner: Spawner,
-    // / Handle to the IO reactor
-    // pub(crate) io: IoHandle,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Spawner {
-    queue: Arc<RunQueue>,
+    pub(crate) queue: *mut Queue,
 }
 
-// Declare a memory pool to hold the reference-counted queues. We're
-// using Arc even though it's a single-threaded executor, because there's
-// no good static Rc implementation and I'm not interested in writing it
-// myself lmao.
-arc_pool!(RunQueue: RefCell<Queue>);
+// pub struct Scheduler(*mut Queue);
 
 // ===== impl Runtime =====
 
 impl Runtime {
+    #[allow(non_upper_case_globals)]
     pub fn new() -> Runtime {
-        // How we calculate the size:
-        //   1. The size of the queue itself
-        //   2. The size of pointers (for the reference counts). We need two: one that
-        //      is stored in the runtime [Handle] and one in [Spawner]. And we need one
-        //      for each task as each task stores a pointer to the queue
-        const SIZE: usize = {
-            let arc_size = core::mem::size_of::<Arc<RunQueue>>();
-            let queue_size = core::mem::size_of::<Queue>();
-            queue_size + ((MAX_NUM_TASKS + 2) * arc_size)
-        };
-        static mut MEMORY: [u8; SIZE] = [0; SIZE];
+        static mut queue: Queue = Queue::new(); // "alloc" queue
+        let queue_ptr = unsafe { &queue as *const _ as *mut Queue };
+        let inner = RefCell::new(Inner { queue: queue_ptr });
 
-        // No unsafe in docs, maybe don't need it?
-        unsafe { RunQueue::grow(&mut MEMORY) };
-
-        let queue: Arc<RunQueue> = RunQueue::alloc(RefCell::new(Queue::new()))
-            .ok()
-            .expect("oom");
-        let spawner = Spawner {
-            queue: queue.clone(),
-        };
-
-        let inner = RefCell::new(Inner { queue });
+        let spawner = Spawner { queue: queue_ptr };
         let handle = Handle { spawner };
 
+
+        defmt::debug!("Queue ptr (handle): {}", handle.spawner.queue);
+        defmt::debug!("Head ptr (handle): {}", unsafe {
+            &(*handle.spawner.queue).head
+        });
+        defmt::debug!("Tail ptr (handle): {}", unsafe {
+            &(*handle.spawner.queue).head
+        });
+
+        let borrow = inner.borrow();
+        defmt::debug!("Queue ptr (inner): {}", borrow.queue);
+        defmt::debug!("Head ptr (inner): {}", unsafe { &(*borrow.queue).head });
+        defmt::debug!("Tail ptr (inner): {}", unsafe  { &(*borrow.queue).tail });
+
+        drop(borrow);
+
         Runtime { inner, handle }
+    }
+
+    pub fn q(&self) {
+        defmt::debug!("");
+        defmt::debug!("Queue ptr (handle): {}", self.handle.spawner.queue);
+        defmt::debug!("Head ptr (handle): {}", unsafe {
+            &(*self.handle.spawner.queue).head
+        });
+        defmt::debug!("Tail ptr (handle): {}", unsafe {
+            &(*self.handle.spawner.queue).head
+        });
+
+        let inner = self.inner.borrow();
+        defmt::debug!("Queue ptr (inner): {}", inner.queue);
+        defmt::debug!("Head ptr (inner): {}", unsafe { &(*inner.queue).head });
+        defmt::debug!("Tail ptr (inner): {}", unsafe { &(*inner.queue).tail });
     }
 
     // Get the handle to the runtime
@@ -87,14 +91,14 @@ impl Runtime {
     // Spawn a task onto the runtime
     pub fn spawn<F: Future<Output = T>, T>(
         &self,
-        raw: RawTask<F, T, Arc<RunQueue>>,
+        raw: RawTask<F, T>,
     ) -> Result<JoinHandle<T>, SpawnError> {
         self.handle.spawn(raw)
     }
 
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         // Enter runtime context
-        let _enter = context::enter(self.handle.clone());
+        let _enter = context::enter(self.handle);
         self.inner.borrow_mut().block_on(future)
     }
 }
@@ -119,8 +123,7 @@ impl Inner {
 
             // TODO: Block if we are waiting on something, waiting for the waker
             // to call and unblock
-            
-            let mut queue = self.queue.borrow_mut();
+            let queue = unsafe { &mut (*self.queue) };
             loop {
                 let task = queue.pop();
                 match task {
@@ -131,6 +134,7 @@ impl Inner {
                     None => break,
                 }
             }
+            // panic!()
         }
     }
 }
@@ -140,7 +144,7 @@ impl Inner {
 impl Handle {
     pub fn spawn<F: Future<Output = T>, T>(
         &self,
-        raw: RawTask<F, T, Arc<RunQueue>>,
+        raw: RawTask<F, T>,
     ) -> Result<JoinHandle<T>, SpawnError> {
         self.spawner.spawn(raw)
     }
@@ -149,20 +153,17 @@ impl Handle {
 // ===== impl Spawner =====
 
 pub enum SpawnError {
-    QueueFull
+    QueueFull,
 }
 
 impl Spawner {
     pub fn spawn<F: Future<Output = T>, T>(
         &self,
-        raw: RawTask<F, T, Arc<RunQueue>>,
+        raw: RawTask<F, T>,
     ) -> Result<JoinHandle<T>, SpawnError> {
-        // We need to write the scheduler into the RawTask
         let memory = raw.memory();
-        let task = memory.task();
-        let task_ptr = task as *const _ as *mut Task;
-
-        unsafe { memory.scheduler.write(self.queue.clone()) }
+        // We need to write the scheduler into the RawTask
+        memory.scheduler.replace(self.queue);
 
         // pointer to Memory inside of RawTask
         let ptr = unsafe { NonNull::new_unchecked(raw.ptr) };
@@ -171,23 +172,30 @@ impl Spawner {
             raw: ptr,
             _marker: PhantomData,
         };
+
+        // Get a pointer to our task to store in the queue
+        let task = memory.task();
+        let task_ptr = task as *const _ as *mut Task;
+        defmt::debug!("Task {}", task_ptr);
+
+        defmt::debug!("");
+        defmt::debug!("Queue ptr (handle): {}", self.queue);
+        defmt::debug!("Head ptr (handle): {}", unsafe {
+            &(*self.queue).head
+        });
+        defmt::debug!("Tail ptr (handle): {}", unsafe {
+            &(*self.queue).head
+        });
+
+        unsafe { self.queue.as_mut().unwrap().insert(task_ptr); }
+
+        let spawned: Result<(), ()> = Ok(());
+        if spawned.is_err() {
+            return Err(SpawnError::QueueFull);
+        }
         defmt::debug!("Task {}: Spawned", task.id);
 
-        let spawned = self.queue.schedule(task_ptr);
-        if spawned.is_err() {
-            return Err(SpawnError::QueueFull)
-        }
-
         Ok(join_handle)
-    }
-}
-
-// ===== impl Queue =====
-
-impl Schedule for Arc<RunQueue> {
-    fn schedule(&self, task: *mut Task) -> Result<(), ()> {
-        self.borrow_mut().insert(task);
-        Ok(())
     }
 }
 
