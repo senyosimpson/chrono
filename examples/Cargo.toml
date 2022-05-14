@@ -20,8 +20,8 @@ defmt = "0.3.1"
 # path = "join.rs"
 
 [[example]]
-name = "channels"
-path = "channels.rs"
+name = "channel"
+path = "channel.rs"
 
 # [[example]]
 # name = "tcp_read"
