@@ -2,6 +2,7 @@
 #![no_std]
 
 pub mod channel;
+pub use channel::mpsc;
 
 pub mod runtime;
 pub use runtime::Runtime;

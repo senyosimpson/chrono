@@ -1,57 +1,28 @@
-//! A multi-producer, single-consumer queue for sending values between
-//! asynchronous tasks.
-
 use core::cell::RefCell;
-use core::task::{Context, Poll, Waker};
+use core::task::{Waker, Context, Poll};
 
-use futures_util::future::poll_fn;
 use heapless::Deque;
 
-use super::cell::StaticCell;
-use super::error::{SendError, TryRecvError};
+use crate::channel::error::{SendError, TryRecvError};
+use crate::channel::semaphore::Semaphore;
 
-/// Takes a [Channel] and splits it into Sender and Receiver halves. Each
-/// half contains a reference to the channel. This avoids having to use
-/// reference counting explicitly which requires allocations
-pub fn split<T, const N: usize>(chan: &Channel<T, N>) -> (Sender<T, N>, Receiver<T, N>) {
-    (Sender { chan }, Receiver { chan })
-}
-
-/// Holds a [Channel]. Really the purpose of this is to create a more pleasant
-/// API when initialising static [Channel]s.
-pub struct ChannelCell<T, const N: usize>(StaticCell<Channel<T, N>>);
-
-impl<T, const N: usize> ChannelCell<T, N> {
-    pub const fn new() -> ChannelCell<T, N> {
-        ChannelCell(StaticCell::new())
-    }
-
-    pub fn set(&self, channel: Channel<T, N>) -> &Channel<T, N> {
-        self.0.set(channel)
-    }
-}
-
-pub struct Sender<'ch, T, const N: usize> {
-    chan: &'ch Channel<T, N>,
-}
-
-pub struct Receiver<'ch, T, const N: usize> {
-    chan: &'ch Channel<T, N>,
-}
 
 pub struct Channel<T, const N: usize> {
+    /// Inner state of the channel
     inner: RefCell<Inner<T, N>>,
+    /// Coordinate access to channel
+    semaphore: Semaphore,
 }
 
 struct Inner<T, const N: usize> {
-    // Queue holding messages
+    /// Queue holding messages
     queue: Deque<T, N>,
-    // Number of outstanding sender handles. When it drops to
-    // zero, we close the sending half of the channel
+    /// Number of outstanding sender handles. When it drops to
+    /// zero, we close the sending half of the channel
     tx_count: usize,
-    // State of the channel
+    /// State of the channel
     state: State,
-    // Waker notified when items are pushed into the channel
+    /// Waker notified when items are pushed into the channel
     rx_waker: Option<Waker>,
 }
 
@@ -60,57 +31,14 @@ enum State {
     Closed,
 }
 
-// ==== impl Sender =====
-
-impl<'ch, T, const N: usize> Sender<'ch, T, N> {
-    pub fn send(&self, message: T) -> Result<(), SendError<T>> {
-        self.chan.send(message)
-    }
-}
-
-impl<'ch, T, const N: usize> Clone for Sender<'ch, T, N> {
-    fn clone(&self) -> Self {
-        self.chan.incr_tx_count();
-        Self { chan: self.chan }
-    }
-}
-
-impl<'ch, T, const N: usize> Drop for Sender<'ch, T, N> {
-    fn drop(&mut self) {
-        defmt::debug!("Dropping sender");
-        self.chan.decr_tx_count();
-        if self.chan.tx_count() == 0 {
-            self.chan.close();
-        }
-    }
-}
-
-// ===== impl Receiver =====
-
-impl<'ch, T, const N: usize> Receiver<'ch, T, N> {
-    pub async fn recv(&self) -> Option<T> {
-        poll_fn(|cx| self.chan.recv(cx)).await
-    }
-
-    pub fn try_recv(&self) -> Result<T, TryRecvError> {
-        self.chan.try_recv()
-    }
-}
-
-impl<'ch, T, const N: usize> Drop for Receiver<'ch, T, N> {
-    fn drop(&mut self) {
-        defmt::debug!("Dropping receiver");
-        self.chan.close();
-    }
-}
-
 // ===== impl Channel =====
 
 impl<T, const N: usize> Channel<T, N> {
-    pub fn new() -> Channel<T, N> {
+    pub const fn new() -> Channel<T, N> {
         Channel {
+            semaphore: Semaphore::new(N),
             inner: RefCell::new(Inner {
-                queue: Deque::new(),
+                queue: Deque::new(), 
                 tx_count: 1,
                 state: State::Open,
                 rx_waker: None,
@@ -126,23 +54,27 @@ impl<T, const N: usize> Channel<T, N> {
         }
     }
 
-    fn close(&self) {
+    pub fn close(&self) {
         let mut inner = self.inner.borrow_mut();
         inner.state = State::Closed;
     }
 
-    fn incr_tx_count(&self) {
+    pub fn incr_tx_count(&self) {
         let mut inner = self.inner.borrow_mut();
         inner.tx_count += 1;
     }
 
-    fn decr_tx_count(&self) {
+    pub fn decr_tx_count(&self) {
         let mut inner = self.inner.borrow_mut();
         inner.tx_count -= 1;
     }
 
-    fn tx_count(&self) -> usize {
+    pub fn tx_count(&self) -> usize {
         self.inner.borrow().tx_count
+    }
+
+    pub fn semaphore(&self) -> &Semaphore {
+        &self.semaphore
     }
 
     pub fn send(&self, message: T) -> Result<(), SendError<T>> {
@@ -202,3 +134,7 @@ impl<T, const N: usize> Channel<T, N> {
         }
     }
 }
+
+// SAFETY: This executor is single-threaded, thus making it safe to
+// implement Sync
+unsafe impl<T, const N:usize> Sync for Channel<T, N> {}
