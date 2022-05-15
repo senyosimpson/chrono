@@ -50,7 +50,6 @@ impl Runtime {
         let spawner = Spawner { queue: queue_ptr };
         let handle = Handle { spawner };
 
-
         defmt::debug!("Queue ptr (handle): {}", handle.spawner.queue);
         defmt::debug!("Head ptr (handle): {}", unsafe {
             &(*handle.spawner.queue).head
@@ -62,7 +61,7 @@ impl Runtime {
         let borrow = inner.borrow();
         defmt::debug!("Queue ptr (inner): {}", borrow.queue);
         defmt::debug!("Head ptr (inner): {}", unsafe { &(*borrow.queue).head });
-        defmt::debug!("Tail ptr (inner): {}", unsafe  { &(*borrow.queue).tail });
+        defmt::debug!("Tail ptr (inner): {}", unsafe { &(*borrow.queue).tail });
 
         drop(borrow);
 
@@ -125,6 +124,8 @@ impl Inner {
 
             let queue = unsafe { &mut (*self.queue) };
             if queue.is_empty() {
+                // TODO: Wrap this functionality with an interrupt processor
+                // that then schedules new events
                 wait_for_interrupt()
             }
 
@@ -183,14 +184,12 @@ impl Spawner {
 
         defmt::debug!("");
         defmt::debug!("Queue ptr (handle): {}", self.queue);
-        defmt::debug!("Head ptr (handle): {}", unsafe {
-            &(*self.queue).head
-        });
-        defmt::debug!("Tail ptr (handle): {}", unsafe {
-            &(*self.queue).head
-        });
+        defmt::debug!("Head ptr (handle): {}", unsafe { &(*self.queue).head });
+        defmt::debug!("Tail ptr (handle): {}", unsafe { &(*self.queue).head });
 
-        unsafe { self.queue.as_mut().unwrap().push_back(task_ptr); }
+        unsafe {
+            self.queue.as_mut().unwrap().push_back(task_ptr);
+        }
 
         let spawned: Result<(), ()> = Ok(());
         if spawned.is_err() {

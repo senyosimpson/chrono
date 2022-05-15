@@ -1,8 +1,8 @@
 use core::task::Waker;
 
-use crate::task::Task;
 use crate::task::raw::TaskVTable;
 use crate::task::state::State;
+use crate::task::Task;
 
 pub struct Header {
     pub task: Task,
@@ -21,17 +21,5 @@ impl Header {
             Some(waker) => waker.wake_by_ref(),
             None => panic!("Missing waker!"),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn increment_counter() {
-        let counter = Counter::default();
-        assert_eq!(1, counter.incr());
-        assert_eq!(2, counter.incr());
-        assert_eq!(3, counter.incr());
     }
 }

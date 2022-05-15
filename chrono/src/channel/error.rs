@@ -4,7 +4,7 @@ use core::fmt;
 #[derive(Debug)]
 pub enum SendError<T> {
     Full(T),
-    Closed(T)
+    Closed(T),
 }
 
 impl<T> fmt::Display for SendError<T> {

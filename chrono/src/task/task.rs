@@ -73,3 +73,15 @@ impl Display for TaskId {
         write!(f, "{}", self.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn increment_counter() {
+        let counter = Counter::default();
+        assert_eq!(1, counter.incr());
+        assert_eq!(2, counter.incr());
+        assert_eq!(3, counter.incr());
+    }
+}

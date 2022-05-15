@@ -234,7 +234,7 @@ where
         let scheduler = memory.scheduler.borrow_mut();
         // TODO We need to store that a task failed to be scheduled in the
         // state or something of that kind
-        let _ = scheduler.as_mut().unwrap().insert(task_ptr);
+        let _ = scheduler.as_mut().unwrap().push_back(task_ptr);
     }
 
     // Runs the future and updates its state

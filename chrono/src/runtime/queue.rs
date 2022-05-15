@@ -18,7 +18,11 @@ impl Queue {
         }
     }
 
-    pub fn insert(&mut self, task: *mut Task) {
+    pub fn is_empty(&self) -> bool {
+        self.head.is_null()
+    }
+
+    pub fn push_back(&mut self, task: *mut Task) {
         defmt::debug!("Inserting into list: Task {}", task);
         defmt::debug!("Head ptr: {}", self.head);
         defmt::debug!("Tail ptr: {}", self.tail);
@@ -45,7 +49,7 @@ impl Queue {
         // If self.head is None, it means we don't have anything
         // in the queue
         if self.head.is_null() {
-            return None
+            return None;
         }
 
         // If we are on the last element in the queue, head and tail will be the same.
@@ -64,9 +68,3 @@ impl Queue {
         }
     }
 }
-
-// impl Drop for Queue {
-//     fn drop(&mut self) {
-//         defmt::debug!("Queue dropped!");
-//     }
-// }
