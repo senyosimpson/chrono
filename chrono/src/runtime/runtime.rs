@@ -4,6 +4,8 @@ use core::marker::PhantomData;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
+use stm32f3_discovery::wait_for_interrupt;
+
 use super::context;
 use super::queue::Queue;
 use crate::task::join::JoinHandle;
@@ -121,9 +123,11 @@ impl Inner {
             }
             defmt::debug!("`block_on` future pending");
 
-            // TODO: Block if we are waiting on something, waiting for the waker
-            // to call and unblock
             let queue = unsafe { &mut (*self.queue) };
+            if queue.is_empty() {
+                wait_for_interrupt()
+            }
+
             loop {
                 let task = queue.pop();
                 match task {
@@ -134,7 +138,6 @@ impl Inner {
                     None => break,
                 }
             }
-            // panic!()
         }
     }
 }
@@ -187,7 +190,7 @@ impl Spawner {
             &(*self.queue).head
         });
 
-        unsafe { self.queue.as_mut().unwrap().insert(task_ptr); }
+        unsafe { self.queue.as_mut().unwrap().push_back(task_ptr); }
 
         let spawned: Result<(), ()> = Ok(());
         if spawned.is_err() {
