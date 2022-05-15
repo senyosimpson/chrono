@@ -2,22 +2,12 @@ use core::fmt;
 
 // ===== Send Error =====
 #[derive(Debug)]
-pub struct SendError<T>(pub T);
-
-impl<T> fmt::Display for SendError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "sending on a closed channel")
-    }
+pub enum SendError<T> {
+    Full(T),
+    Closed(T)
 }
 
-// ===== Try Send Error =====
-
-// Currently the same as the Send Error. This is because bounded channels
-// aren't currently supported. Otherwise we would have two failure cases
-#[derive(Debug)]
-pub struct TrySendError<T>(pub T);
-
-impl<T> fmt::Display for TrySendError<T> {
+impl<T> fmt::Display for SendError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "sending on a closed channel")
     }

@@ -1,17 +1,13 @@
 use core::cell::RefCell;
-use core::task::{Waker, Context, Poll};
+use core::task::{Context, Poll, Waker};
 
 use heapless::Deque;
 
-use crate::channel::error::{SendError, TryRecvError};
-use crate::channel::semaphore::Semaphore;
-
+use super::error::{SendError, TryRecvError};
 
 pub struct Channel<T, const N: usize> {
     /// Inner state of the channel
     inner: RefCell<Inner<T, N>>,
-    /// Coordinate access to channel
-    semaphore: Semaphore,
 }
 
 struct Inner<T, const N: usize> {
@@ -36,9 +32,8 @@ enum State {
 impl<T, const N: usize> Channel<T, N> {
     pub const fn new() -> Channel<T, N> {
         Channel {
-            semaphore: Semaphore::new(N),
             inner: RefCell::new(Inner {
-                queue: Deque::new(), 
+                queue: Deque::new(),
                 tx_count: 1,
                 state: State::Open,
                 rx_waker: None,
@@ -73,25 +68,25 @@ impl<T, const N: usize> Channel<T, N> {
         self.inner.borrow().tx_count
     }
 
-    pub fn semaphore(&self) -> &Semaphore {
-        &self.semaphore
-    }
-
     pub fn send(&self, message: T) -> Result<(), SendError<T>> {
         let mut inner = self.inner.borrow_mut();
         match inner.state {
-            State::Open => {
-                inner.queue.push_back(message);
-                if let Some(rx_waker) = &inner.rx_waker {
-                    rx_waker.wake_by_ref();
+            State::Open => match inner.queue.push_back(message) {
+                Ok(_) => {
+                    // If there is a receiver waiting for a message, notify
+                    // that a message has been sent on the channel
+                    if let Some(rx_waker) = &inner.rx_waker {
+                        rx_waker.wake_by_ref();
+                    }
+                    Ok(())
                 }
-                Ok(())
-            }
-            State::Closed => Err(SendError(message)),
+                Err(message) => Err(SendError::Full(message)),
+            },
+            State::Closed => Err(SendError::Closed(message)),
         }
     }
 
-    pub fn recv(&self, cx: &mut Context) -> Poll<Option<T>> {
+    pub fn poll_recv(&self, cx: &mut Context) -> Poll<Option<T>> {
         let mut inner = self.inner.borrow_mut();
         match inner.queue.pop_front() {
             // If there is a message, regardless if the channel is closed,
@@ -137,4 +132,4 @@ impl<T, const N: usize> Channel<T, N> {
 
 // SAFETY: This executor is single-threaded, thus making it safe to
 // implement Sync
-unsafe impl<T, const N:usize> Sync for Channel<T, N> {}
+unsafe impl<T, const N: usize> Sync for Channel<T, N> {}

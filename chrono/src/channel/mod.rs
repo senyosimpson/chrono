@@ -1,6 +1,5 @@
-mod semaphore;
-mod linked_list; 
+mod channel;
+pub use channel::Channel;
 
 pub mod error;
 pub mod mpsc;
-
