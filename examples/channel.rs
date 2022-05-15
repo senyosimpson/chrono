@@ -6,32 +6,35 @@ use defmt_rtt as _;
 use panic_probe as _;
 use stm32f3 as _;
 
-use chrono::mpsc::{self, Channel};
-use chrono::mpsc::bounded::{Sender, Receiver};
+use chrono::channel::Channel;
+use chrono::mpsc::{self, Receiver, Sender};
 use chrono::Runtime;
 
-const CHAN_SIZE: usize = 32;
-static CHANNEL: Channel<&str, CHAN_SIZE> = mpsc::bounded::channel();
+#[allow(non_upper_case_globals)]
+const chan_size: usize = 2;
 
 #[chrono::alloc]
-async fn send(tx: Sender<'static, &str, CHAN_SIZE>) -> u8 {
+async fn send(tx: Sender<'static, &str, chan_size>) -> u8 {
     defmt::info!("Sending message from task 1");
-    tx.send("task 1: fly.io").await.unwrap();
+    tx.send("task 1: fly.io").unwrap();
     5
 }
 
 #[chrono::alloc]
-async fn receive(rx: Receiver<'static, &str, CHAN_SIZE>) {
+async fn receive(rx: Receiver<'static, &str, chan_size>) {
     defmt::info!("Received message: {}", rx.recv().await.unwrap());
 }
 
+#[allow(non_upper_case_globals)]
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let rt = Runtime::new();
 
     rt.block_on(async {
-        let (tx, rx) = mpsc::bounded::split(&CHANNEL);
-        let res = chrono::spawn(send(tx.clone()));
+        static channel: Channel<&str, chan_size> = mpsc::channel();
+
+        let (tx, rx) = mpsc::split(&channel);
+        let res = chrono::spawn(send(tx));
         let handle = match res {
             Ok(handle) => handle,
             Err(_) => panic!("Could not spawn task!"),
@@ -47,5 +50,7 @@ fn main() -> ! {
     });
 
     defmt::info!("Success!");
-    loop { cortex_m::asm::bkpt(); }
+    loop {
+        cortex_m::asm::bkpt();
+    }
 }
