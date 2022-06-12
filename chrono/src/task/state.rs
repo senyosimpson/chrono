@@ -15,30 +15,8 @@ const JOIN_HANDLE: usize = 1 << 3;
 // The waker belonging to the join handle is registered
 const JOIN_WAKER: usize = 1 << 4;
 
-// The idea of using a state mask and ref count mask and figuring
-// out how much to shift is from Tokio
-const STATE_MASK: usize = SCHEDULED | RUNNING | COMPLETE | JOIN_HANDLE | JOIN_WAKER;
-
-// The bits belonging to the ref count. These are the upper bits.
-// It is calculated by inverting the bits belonging to the
-// state i.e 0011 -> 1100
-const REF_COUNT_MASK: usize = !STATE_MASK;
-
-// TODO: Word explanation better
-// This calculates how many 0s there are in the binary number. This
-// takes advantage of the structure of the REF_COUNT_MASK to figure
-// out how many bits to shift to the left to get to the reference.
-// Since we will *always* a number starting with 1s and ending in 0s
-// we can figure this out i.e 111000 for a ref count mask means we
-// need to shift left 3 times to get to the ref count bits
-const REF_COUNT_SHIFT: usize = REF_COUNT_MASK.count_zeros() as usize;
-
-const REF_ONE: usize = 1 << REF_COUNT_SHIFT;
-
-// The task has an initial reference count of two
-//   * The JoinHandle
-//   * The internal Task
-const INITIAL_STATE: usize = (REF_ONE * 2) | SCHEDULED | JOIN_HANDLE;
+// Initial state of a task
+const INITIAL_STATE: usize = SCHEDULED | JOIN_HANDLE;
 
 pub struct State {
     pub state: usize,
@@ -59,37 +37,6 @@ impl State {
             state: INITIAL_STATE,
             task_id: Some(task_id),
         }
-    }
-
-    pub fn ref_incr(&mut self) {
-        self.state += REF_ONE;
-
-        if let Some(task_id) = self.task_id {
-            defmt::debug!(
-                "Task {}: Incr ref count. Value: {}",
-                task_id,
-                self.ref_count()
-            )
-        }
-    }
-
-    pub fn ref_decr(&mut self) {
-        self.state -= REF_ONE;
-
-        if let Some(task_id) = self.task_id {
-            defmt::debug!(
-                "Task {}: Decr ref count. Value: {}",
-                task_id,
-                self.ref_count()
-            )
-        }
-    }
-
-    pub fn ref_count(&self) -> usize {
-        // To calculate the ref count, we AND with the ref count mask
-        // and then shift the bits down so that they begin at the
-        // start bit of the reference count
-        (self.state & REF_COUNT_MASK) >> REF_COUNT_SHIFT
     }
 
     pub fn unset_join_handle(&mut self) {
@@ -181,11 +128,10 @@ impl core::fmt::Display for State {
         let complete = self.is_complete();
         let join_handle = self.state & JOIN_HANDLE == JOIN_HANDLE;
         let join_waker = self.has_join_waker();
-        let ref_count = self.ref_count();
         write!(
             f,
-            "State {{ scheduled={}, running={}, complete={}, has_join_handle={}, has_join_waker={}, ref_count={} }}",
-            scheduled, running, complete, join_handle, join_waker, ref_count
+            "State {{ scheduled={}, running={}, complete={}, has_join_handle={}, has_join_waker={}}}",
+            scheduled, running, complete, join_handle, join_waker
         )
     }
 }
@@ -197,11 +143,10 @@ impl defmt::Format for State {
         let complete = self.is_complete();
         let join_handle = self.state & JOIN_HANDLE == JOIN_HANDLE;
         let join_waker = self.has_join_waker();
-        let ref_count = self.ref_count();
         defmt::write!(
             f,
-            "State {{ scheduled={}, running={}, complete={}, has_join_handle={}, has_join_waker={}, ref_count={} }}",
-            scheduled, running, complete, join_handle, join_waker, ref_count
+            "State {{ scheduled={}, running={}, complete={}, has_join_handle={}, has_join_waker={}}}",
+            scheduled, running, complete, join_handle, join_waker
         )
     }
 }

@@ -187,11 +187,6 @@ where
         let memory = raw.memory();
         let header = memory.mut_header();
 
-        // header.task.set(NonNull::new_unchecked(ptr as *mut ()));
-        // When we create a new task, we need to increment its reference
-        // count since we now have another 'thing' holding a reference
-        // to the raw task
-        header.state.ref_incr();
         header.timer_expiry = Some(deadline);
 
         let task_ptr = memory.task() as *const _ as *mut Task;
