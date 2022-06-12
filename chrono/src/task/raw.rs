@@ -102,7 +102,7 @@ where
     const RAW_WAKER_VTABLE: RawWakerVTable = RawWakerVTable::new(
         Self::clone_waker,
         Self::wake,
-        Self::wake_by_ref,
+        Self::wake,
         Self::drop_waker,
     );
 
@@ -151,42 +151,15 @@ where
         }
     }
 
-    // TODO: No deallocations in embedded so we can remove this
-    #[allow(clippy::missing_safety_doc)]
-    pub unsafe fn dealloc(ptr: *const ()) {
-        let raw = Self::from_ptr(ptr);
-        let memory = raw.memory();
-        let task = memory.task();
-        defmt::debug!("Task {}: Deallocating", task.id);
-    }
-
-    // Makes a clone of the waker
-    // Increments the number of references to the waker
     unsafe fn clone_waker(ptr: *const ()) -> RawWaker {
-        let raw = Self::from_ptr(ptr);
-        let memory = raw.memory();
-        let header = memory.mut_header();
-
-        header.state.ref_incr();
         RawWaker::new(ptr, &Self::RAW_WAKER_VTABLE)
     }
 
-    // This is responsible for decrementing a reference count and ensuring
-    // the task is destroyed if the reference count is 0
-    unsafe fn drop_waker(ptr: *const ()) {
-        let raw = Self::from_ptr(ptr);
-        let memory = raw.memory();
-        let header = memory.mut_header();
-
-        header.state.ref_decr();
-        if header.state.ref_count() == 0 {
-            Self::dealloc(ptr)
-        }
+    unsafe fn drop_waker(_: *const ()) {
+        // no op
     }
 
     /// Wakes the task
-    // One requirement here is that it must be safe
-    // to call `wake` even if the task has been driven to completion
     unsafe fn wake(ptr: *const ()) {
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
@@ -196,41 +169,15 @@ where
         defmt::debug!("Task {}: Waking raw task", task.id);
 
         header.state.transition_to_scheduled();
-        // We get one reference count from the caller. We schedule a task which
-        // increases our reference count by one.
-        Self::schedule(ptr);
-        // We can now drop our reference from the caller
-        Self::drop_waker(ptr);
-    }
-
-    unsafe fn wake_by_ref(ptr: *const ()) {
-        let raw = Self::from_ptr(ptr);
-        let memory = raw.memory();
-        let header = memory.mut_header();
-
-        let task = memory.task();
-        defmt::debug!("Task {}: Waking raw task by ref", task.id);
-
-        header.state.transition_to_scheduled();
         Self::schedule(ptr);
     }
 
     unsafe fn schedule(ptr: *const ()) {
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
-        let header = memory.mut_header();
-
-        // header.task.set(NonNull::new_unchecked(ptr as *mut ()));
-        // When we create a new task, we need to increment its reference
-        // count since we now have another 'thing' holding a reference
-        // to the raw task
-        header.state.ref_incr();
 
         let task_ptr = memory.task() as *const _ as *mut Task;
-        // let scheduler = &mut (*memory.scheduler());
         let scheduler = memory.scheduler.borrow_mut();
-        // TODO We need to store that a task failed to be scheduled in the
-        // state or something of that kind
         scheduler.as_mut().unwrap().push_back(task_ptr);
     }
 
@@ -315,15 +262,8 @@ where
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
         let header = memory.mut_header();
-
         // unset join handle bit
         header.state.unset_join_handle();
-        // drop the reference the handle was holding, possibly
-        // deallocating the task
-        header.state.ref_decr();
-        if header.state.ref_count() == 0 {
-            Self::dealloc(ptr)
-        }
     }
 }
 
