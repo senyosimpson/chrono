@@ -51,10 +51,7 @@ impl Task {
         let ptr = self.raw.as_ptr();
         let header = unsafe { &*(ptr as *const Header) };
         match header.timer_expiry {
-            Some(expiry) => {
-                defmt::debug!("Now: {}, Expiry: {}", now, expiry);
-                now > expiry
-            },
+            Some(expiry) => now > expiry,
             None => false,
         }
     }

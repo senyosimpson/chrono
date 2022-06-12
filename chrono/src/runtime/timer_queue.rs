@@ -45,8 +45,6 @@ impl Queue {
     }
 
     pub fn process(&mut self, now: Instant) {
-        defmt::debug!("Processing timers. Now is: {}", now);
-
         self.deadline = Instant::max();
 
         if self.head.is_null() {

@@ -29,9 +29,7 @@ impl Duration {
     }
 
     pub fn as_micros(&self) -> u32 {
-        unsafe {
-            self.ticks * (1_000_000 / GCD_1M) / (TIMER.ticks_per_second() / GCD_1M)
-        }
+        unsafe { self.ticks * (1_000_000 / GCD_1M) / (TIMER.ticks_per_second() / GCD_1M) }
     }
 }
 

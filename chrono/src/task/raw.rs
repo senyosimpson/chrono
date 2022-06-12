@@ -99,12 +99,8 @@ impl<F, T> RawTask<F, T>
 where
     F: Future<Output = T>,
 {
-    const RAW_WAKER_VTABLE: RawWakerVTable = RawWakerVTable::new(
-        Self::clone_waker,
-        Self::wake,
-        Self::wake,
-        Self::drop_waker,
-    );
+    const RAW_WAKER_VTABLE: RawWakerVTable =
+        RawWakerVTable::new(Self::clone_waker, Self::wake, Self::wake, Self::drop_waker);
 
     pub fn new(memory: &Memory<F, T>, future: impl FnOnce() -> F) -> RawTask<F, T> {
         let ptr = memory as *const _ as *mut ();
@@ -182,7 +178,6 @@ where
     }
 
     unsafe fn schedule_timer(ptr: *const (), deadline: Instant) {
-        defmt::debug!("Timer scheduled. Expiry at {}", deadline);
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
         let header = memory.mut_header();
