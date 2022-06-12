@@ -1,6 +1,6 @@
 use core::cmp::{PartialEq, PartialOrd};
 
-use super::{timer::TIMER, GCD_1M};
+use super::TICKS_PER_SECOND;
 
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
 pub struct Duration {
@@ -17,19 +17,19 @@ impl Duration {
     }
 
     pub fn as_secs(&self) -> u32 {
-        unsafe { self.ticks / TIMER.ticks_per_second() }
+        unsafe { self.ticks / TICKS_PER_SECOND }
     }
 
     pub fn from_secs(secs: u32) -> Duration {
         unsafe {
             Duration {
-                ticks: secs * TIMER.ticks_per_second(),
+                ticks: secs * TICKS_PER_SECOND,
             }
         }
     }
 
     pub fn as_micros(&self) -> u32 {
-        unsafe { self.ticks * (1_000_000 / GCD_1M) / (TIMER.ticks_per_second() / GCD_1M) }
+        self.ticks
     }
 }
 
