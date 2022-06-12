@@ -86,8 +86,9 @@ impl Inner {
         let mut core_peripherals = CorePeripherals::take().unwrap();
 
         let mut rcc = peripherals.RCC.constrain();
+        let cfg = rcc.cfgr.hclk(1.MHz());
         let mut flash = peripherals.FLASH.constrain();
-        let clocks = rcc.cfgr.freeze(&mut flash.acr);
+        let clocks = cfg.freeze(&mut flash.acr);
 
         let mut timer = HardwareTimer::new(peripherals.TIM2, clocks, &mut rcc.apb1);
         // Can remove this and just do the setup manually for DWT

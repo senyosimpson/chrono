@@ -1,6 +1,6 @@
 use core::cmp::{PartialEq, PartialOrd};
 
-use super::timer::TIMER;
+use super::{timer::TIMER, GCD_1M};
 
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
 pub struct Duration {
@@ -30,24 +30,13 @@ impl Duration {
 
     pub fn as_micros(&self) -> u32 {
         unsafe {
-            let gcd_1m = gcd(TIMER.ticks_per_second(), 1_000_000);
-            self.ticks * (1_000_000 / gcd_1m) / (TIMER.ticks_per_second() / gcd_1m)
+            self.ticks * (1_000_000 / GCD_1M) / (TIMER.ticks_per_second() / GCD_1M)
         }
     }
-
-    // TODO: Add millis and micros
 }
 
 impl defmt::Format for Duration {
     fn format(&self, f: defmt::Formatter) {
         defmt::write!(f, "{} seconds", self.as_secs())
-    }
-}
-
-fn gcd(a: u32, b: u32) -> u32 {
-    if b == 0 {
-        a
-    } else {
-        gcd(b, a % b)
     }
 }
