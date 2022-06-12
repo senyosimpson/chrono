@@ -7,6 +7,8 @@ use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use crate::runtime::queue::Queue;
+use crate::runtime::timer_queue;
+use crate::time::Instant;
 
 use super::cell::UninitCell;
 use super::header::Header;
@@ -22,6 +24,7 @@ pub struct Memory<F: Future<Output = T>, T> {
     /// runtime. When a task is woken, it calls the related
     /// scheduler to schedule itself
     pub scheduler: RefCell<*mut Queue>,
+    pub timer_queue: RefCell<*mut timer_queue::Queue>,
     /// The status of a task. This is either a future or the
     /// output of a future
     pub status: UninitCell<Status<F, T>>,
@@ -43,14 +46,10 @@ pub enum Status<F: Future<Output = T>, T> {
 
 pub struct TaskVTable {
     pub(crate) poll: unsafe fn(*const ()),
+    pub(crate) schedule: unsafe fn(*const ()),
+    pub(crate) schedule_timer: unsafe fn(*const (), Instant),
     pub(crate) get_output: unsafe fn(*const (), *mut ()),
     pub(crate) drop_join_handle: unsafe fn(*const ()),
-}
-
-// All schedulers must implement the Schedule trait. They
-// are responsible for sending tasks to the runtime queue
-pub trait Schedule {
-    fn schedule(&self, task: *mut Task) -> Result<(), ()>;
 }
 
 // ===== impl Memory ======
@@ -63,6 +62,7 @@ where
         Memory {
             header: UninitCell::uninit(),
             scheduler: RefCell::new(core::ptr::null_mut()),
+            timer_queue: RefCell::new(core::ptr::null_mut()),
             status: UninitCell::uninit(),
         }
     }
@@ -85,10 +85,6 @@ where
         self.status.as_ref()
     }
 
-    // unsafe fn scheduler(&self) -> *mut Queue {
-    //     self.scheduler
-    // }
-
     #[allow(clippy::mut_from_ref)]
     unsafe fn mut_status(&self) -> &mut Status<F, T> {
         self.status.as_mut()
@@ -103,8 +99,6 @@ impl<F, T> RawTask<F, T>
 where
     F: Future<Output = T>,
 {
-    // What implication is there for having a const within an impl? Is that the same
-    // as having it outside?
     const RAW_WAKER_VTABLE: RawWakerVTable = RawWakerVTable::new(
         Self::clone_waker,
         Self::wake,
@@ -119,11 +113,14 @@ where
         let task_id = task.id;
 
         let header = Header {
-            task: task,
+            task,
             state: State::new_with_id(task_id),
+            timer_expiry: None,
             waker: None,
             vtable: &TaskVTable {
                 poll: Self::poll,
+                schedule: Self::schedule,
+                schedule_timer: Self::schedule_timer,
                 get_output: Self::get_output,
                 drop_join_handle: Self::drop_join_handle,
             },
@@ -234,7 +231,27 @@ where
         let scheduler = memory.scheduler.borrow_mut();
         // TODO We need to store that a task failed to be scheduled in the
         // state or something of that kind
-        let _ = scheduler.as_mut().unwrap().push_back(task_ptr);
+        scheduler.as_mut().unwrap().push_back(task_ptr);
+    }
+
+    unsafe fn schedule_timer(ptr: *const (), deadline: Instant) {
+        defmt::debug!("Timer scheduled. Expiry at {}", deadline);
+        let raw = Self::from_ptr(ptr);
+        let memory = raw.memory();
+        let header = memory.mut_header();
+
+        // header.task.set(NonNull::new_unchecked(ptr as *mut ()));
+        // When we create a new task, we need to increment its reference
+        // count since we now have another 'thing' holding a reference
+        // to the raw task
+        header.state.ref_incr();
+        header.timer_expiry = Some(deadline);
+
+        let task_ptr = memory.task() as *const _ as *mut Task;
+        let timer_queue = memory.timer_queue.borrow_mut();
+        // TODO We need to store that a task failed to be scheduled in the
+        // state or something of that kind
+        timer_queue.as_mut().unwrap().push_back(task_ptr);
     }
 
     // Runs the future and updates its state

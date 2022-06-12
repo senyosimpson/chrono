@@ -1,28 +1,41 @@
-use core::time::Duration;
-use std::time::Instant;
+#![no_std]
+#![no_main]
+#![feature(type_alias_impl_trait, generic_associated_types)]
 
-use chrono::time::sleep;
+use defmt_rtt as _;
+use panic_probe as _;
+use stm32f3 as _;
+
+use chrono::time::{sleep, Duration, Instant};
 use chrono::Runtime;
 
-fn main() {
-    tracing_subscriber::fmt::init();
+#[chrono::alloc]
+async fn delay() {
+    let t = 5;
+    defmt::info!("Sleeping for {} seconds!", t);
+    sleep(Duration::from_secs(t)).await;
+}
 
+#[cortex_m_rt::entry]
+fn main() -> ! {
     let rt = Runtime::new();
     rt.block_on(async {
         let now = Instant::now();
-        let handle = chrono::spawn(async {
-            println!("Sleeping for 5 seconds!");
-            sleep(Duration::from_secs(5)).await;
-        });
+        let res = chrono::spawn(delay());
+        let handle = match res {
+            Ok(handle) => handle,
+            Err(_) => panic!("Could not spawn task!"),
+        };
 
-        let _ = handle.await;
+        handle.await;
 
         let later = Instant::now();
         let elapsed = later - now;
-        println!(
-            "Waking from sleep! {}:{} elapsed",
-            elapsed.as_secs(),
-            elapsed.subsec_millis()
-        );
-    })
+        defmt::info!("Woke from sleep! {} elapsed", elapsed.as_secs());
+    });
+
+    defmt::info!("Success!");
+    loop {
+        cortex_m::asm::bkpt();
+    }
 }

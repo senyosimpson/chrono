@@ -27,9 +27,9 @@ path = "channel.rs"
 # name = "tcp_read"
 # path = "tcp_read.rs"
 
-# [[example]]
-# name = "sleep"
-# path = "sleep.rs"
+[[example]]
+name = "sleep"
+path = "sleep.rs"
 
 # [[example]]
 # name = "panic"

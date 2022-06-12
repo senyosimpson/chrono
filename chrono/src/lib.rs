@@ -1,4 +1,4 @@
-#![feature(generic_associated_types, type_alias_impl_trait)]
+#![feature(generic_associated_types, type_alias_impl_trait, waker_getters)]
 #![no_std]
 
 pub mod channel;
@@ -10,6 +10,8 @@ pub use runtime::Runtime;
 pub mod task;
 pub use task::spawn;
 pub use task::Task;
+
+pub mod time;
 
 // Re-exports
 pub use chrono_macros::alloc;

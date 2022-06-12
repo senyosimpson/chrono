@@ -3,10 +3,12 @@ use core::task::Waker;
 use crate::task::raw::TaskVTable;
 use crate::task::state::State;
 use crate::task::Task;
+use crate::time::instant::Instant;
 
 pub struct Header {
     pub task: Task,
     pub state: State,
+    pub timer_expiry: Option<Instant>,
     pub waker: Option<Waker>,        // Why is this wrapped in UnsafeCell?
     pub vtable: &'static TaskVTable, // Why &'static? Think cause they are fns
 }
