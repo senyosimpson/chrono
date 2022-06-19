@@ -1,33 +1,37 @@
 use core::cell::RefCell;
-use core::ops::{Deref, DerefMut};
 
 use stm32f3xx_hal::pac::{self, interrupt, CorePeripherals, Peripherals};
 use stm32f3xx_hal::prelude::*;
-use stm32f3xx_hal::timer::{Event, MonoTimer, Timer as HardwareTimer};
+use stm32f3xx_hal::timer::{Event, Timer};
 
 use super::duration::Duration;
+use super::queue::Queue;
+use super::Instant;
 
-pub(crate) static mut TIMER: Timer = Timer::new();
+pub(crate) static mut DRIVER: Driver = Driver::new();
 
-pub struct Timer {
+/// Driver for timers
+pub struct Driver {
     initialised: bool,
     inner: Option<RefCell<Inner>>,
 }
 
-pub struct Inner {
-    timer: HardwareTimer<pac::TIM2>,
-    monotimer: MonoTimer,
+struct Inner {
+    timer: Timer<pac::TIM2>,
+    queue: Queue,
+    deadline: Instant,
 }
 
-unsafe impl Sync for Timer {}
-
-pub fn timer() -> &'static mut Timer {
-    unsafe { &mut TIMER }
+pub fn driver() -> &'static mut Driver {
+    unsafe { &mut DRIVER }
 }
 
-impl Timer {
-    pub const fn new() -> Timer {
-        Timer {
+// Safe since we are in a single-threaded environment
+unsafe impl Sync for Driver {}
+
+impl Driver {
+    pub const fn new() -> Driver {
+        Driver {
             inner: None,
             initialised: false,
         }
@@ -39,26 +43,17 @@ impl Timer {
     }
 
     pub fn start(&mut self, deadline: Duration) {
-        // Grab the deadline earlier because it also borrows the timer
-        let deadline = deadline.as_micros().microseconds();
-
-        let mut inner = self.inner.as_ref().unwrap().borrow_mut();
-        // Change to a smaller unit of time
-        inner.timer.start(deadline);
-    }
-
-    pub fn ticks_per_second(&self) -> u32 {
         assert!(
             self.initialised,
             "initialise timer before usage via to .init()"
         );
 
-        let inner = self.inner.as_ref().unwrap().borrow();
-        let freq = inner.monotimer.frequency();
-        freq.0
+        let mut inner = self.inner.as_ref().unwrap().borrow_mut();
+        let deadline = deadline.as_micros().microseconds();
+        inner.timer.start(deadline);
     }
 
-    pub fn handle_interrupt(&self) {
+    pub fn handle_interrupt(&mut self) {
         cortex_m::interrupt::free(|_cs| {
             defmt::debug!("INTERRUPT");
             let mut inner = self.inner.as_ref().unwrap().borrow_mut();
@@ -66,6 +61,28 @@ impl Timer {
             inner.timer.stop();
             cortex_m::asm::sev();
         })
+    }
+
+    pub fn deadline(&self) -> Option<Instant> {
+        let inner = self.inner.as_ref().unwrap().borrow();
+        if inner.deadline != Instant::max() {
+            Some(inner.deadline)
+        } else {
+            None
+        }
+    }
+
+    pub fn process(&mut self, now: Instant) {
+        let mut inner = self.inner.as_ref().unwrap().borrow_mut();
+        let deadline = inner.process(now);
+
+        drop(inner);
+
+        if let Some(d) = deadline {
+            let dur = d - Instant::now();
+            self.start(dur);
+            defmt::debug!("Started timer. Deadline in {}", dur);
+        }
     }
 }
 
@@ -90,9 +107,12 @@ impl Inner {
         let mut flash = peripherals.FLASH.constrain();
         let clocks = cfg.freeze(&mut flash.acr);
 
-        let mut timer = HardwareTimer::new(peripherals.TIM2, clocks, &mut rcc.apb1);
-        // Can remove this and just do the setup manually for DWT
-        let monotimer = MonoTimer::new(core_peripherals.DWT, clocks, &mut core_peripherals.DCB);
+        let mut timer = Timer::new(peripherals.TIM2, clocks, &mut rcc.apb1);
+
+        // Setup mono timer. Copied from MonoTimer::new() in hal crate
+        core_peripherals.DCB.enable_trace();
+        core_peripherals.DWT.enable_cycle_counter();
+        drop(core_peripherals.DWT);
 
         // Enable timer interrupts on the chip itself
         unsafe {
@@ -101,26 +121,23 @@ impl Inner {
         // Enable timer interrupt
         timer.enable_interrupt(Event::Update);
 
-        Inner { timer, monotimer }
+        let queue = Queue::new();
+        let deadline = Instant::max();
+
+        Inner {
+            timer,
+            queue,
+            deadline,
+        }
     }
-}
 
-impl Deref for Inner {
-    type Target = HardwareTimer<pac::TIM2>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.timer
-    }
-}
-
-impl DerefMut for Inner {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.timer
+    pub fn process(&mut self, now: Instant) -> Option<Instant> {
+        self.queue.process(now)
     }
 }
 
 /// Set up the interrupt for the timer
 #[interrupt]
 fn TIM2() {
-    unsafe { TIMER.handle_interrupt() };
+    unsafe { DRIVER.handle_interrupt() };
 }

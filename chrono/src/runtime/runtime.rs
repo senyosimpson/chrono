@@ -11,7 +11,6 @@ use crate::task::join::JoinHandle;
 use crate::task::RawTask;
 use crate::task::Task;
 use crate::time::instant::Instant;
-use crate::time::timer;
 
 pub struct Runtime {
     // Holds the task queue
@@ -45,8 +44,8 @@ pub struct Spawner {
 impl Runtime {
     #[allow(non_upper_case_globals)]
     pub fn new() -> Runtime {
-        let timer = timer::timer();
-        timer.init();
+        // Initialise time driver
+        context::time_driver().init();
 
         static mut queue: Queue = Queue::new(); // "alloc" queue
         static mut timer_queue: TimerQueue = TimerQueue::new();
@@ -113,15 +112,16 @@ impl Inner {
 
             // Process timers. Populates the queue with tasks that are ready to execute
             let timer_queue = unsafe { &mut (*self.timer_queue) };
+            let time_driver = context::time_driver();
             let now = Instant::now();
-            timer_queue.process(now);
+            time_driver.process(now);
 
             // Start the timer
             // NOTE: This will cause issues because initially, it will only start timing down
             // once the first batch of tasks have been processed
             if let Some(deadline) = timer_queue.deadline() {
                 let dur = deadline - Instant::now();
-                timer::timer().start(dur);
+                context::time_driver().start(dur);
                 defmt::debug!("Started timer. Deadline in {}", dur);
             }
 

@@ -17,14 +17,12 @@ impl Duration {
     }
 
     pub fn as_secs(&self) -> u32 {
-        unsafe { self.ticks / TICKS_PER_SECOND }
+        self.ticks / TICKS_PER_SECOND
     }
 
     pub fn from_secs(secs: u32) -> Duration {
-        unsafe {
-            Duration {
-                ticks: secs * TICKS_PER_SECOND,
-            }
+        Duration {
+            ticks: secs * TICKS_PER_SECOND,
         }
     }
 

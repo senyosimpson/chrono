@@ -1,3 +1,5 @@
+pub(crate) mod driver;
+
 mod duration;
 pub use duration::Duration;
 
@@ -6,5 +8,7 @@ pub use instant::Instant;
 
 mod sleep;
 pub use sleep::sleep;
+
+mod queue;
 
 const TICKS_PER_SECOND: u32 = 1_000_000;
