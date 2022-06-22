@@ -1,11 +1,12 @@
 use core::cell::Cell;
 use core::fmt::Display;
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 
 use crate::time::instant::Instant;
 
 use super::header::Header;
 
+#[derive(Clone, Copy)]
 pub struct Task {
     pub id: TaskId,
     pub raw: NonNull<()>,
@@ -16,9 +17,10 @@ pub struct Task {
 #[derive(Clone, Copy, defmt::Format)]
 pub struct TaskId(u64);
 
+#[derive(Clone, Copy, Default)]
 pub(crate) struct Pointers {
-    next: *mut Task,
-    prev: *mut Task,
+    next: Option<NonNull<Task>>,
+    prev: Option<NonNull<Task>>,
 }
 
 // ===== impl Task =====
@@ -32,6 +34,10 @@ impl Task {
             tasks: Pointers::default(),
             timers: Pointers::default(),
         }
+    }
+
+    pub fn as_ptr(&self) -> NonNull<Task> {
+        unsafe { NonNull::new_unchecked(self as *const _ as *mut _) }
     }
 
     /// Run the task by calling its poll method
@@ -50,66 +56,45 @@ impl Task {
     pub fn is_timer_complete(&self, now: Instant) -> bool {
         let ptr = self.raw.as_ptr();
         let header = unsafe { &*(ptr as *const Header) };
-        match header.timer_expiry {
+        match header.expiry {
             Some(expiry) => now > expiry,
             None => false,
         }
     }
 
-    pub(crate) fn timer_duration(&self) -> Option<Instant> {
+    /// If a timer has been set, the instant in time it will expire 
+    pub(crate) fn expiry(&self) -> Option<Instant> {
         let ptr = self.raw.as_ptr();
         let header = unsafe { &*(ptr as *const Header) };
-        header.timer_expiry
+        header.expiry
     }
-
-    pub(crate) fn next_task(&self) -> *mut Task {
-        self.tasks.next
-    }
-
-    pub(crate) fn next_timer(&self) -> *mut Task {
-        self.timers.next
-    }
-
-    pub(crate) fn prev_timer(&self) -> *mut Task {
-        self.timers.prev
-    }
-
-    pub(crate) fn set_next_task(&mut self, task: *mut Task) {
-        self.tasks.next = task;
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn set_prev_task(&mut self, task: *mut Task) {
-        self.tasks.prev = task;
-    }
-
-    pub(crate) fn set_next_timer(&mut self, task: *mut Task) {
-        self.timers.next = task;
-    }
-
-    pub(crate) fn set_prev_timer(&mut self, task: *mut Task) {
-        self.timers.prev = task;
+    
+    /// Clears expiry
+    pub(crate) fn clear_expiry(&self) {
+        let ptr = self.raw.as_ptr();
+        let header = unsafe { &mut *(ptr as *mut Header) };
+        header.expiry = None;
     }
 }
 
 // ===== impl Pointers =====
 
 impl Pointers {
-    pub fn is_next_null(&self) -> bool {
-        self.next.is_null()
+    pub fn next(&self) -> Option<NonNull<Task>> {
+        self.next
     }
 
-    pub fn is_prev_null(&self) -> bool {
-        self.prev.is_null()
+    pub fn prev(&self) -> Option<NonNull<Task>> {
+        self.prev
     }
-}
 
-impl Default for Pointers {
-    fn default() -> Self {
-        Self {
-            next: ptr::null_mut(),
-            prev: ptr::null_mut(),
-        }
+    pub(crate) fn set_next(&mut self, task: Option<NonNull<Task>>) {
+        self.next = task;
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn set_prev(&mut self, task: Option<NonNull<Task>>) {
+        self.prev = task;
     }
 }
 

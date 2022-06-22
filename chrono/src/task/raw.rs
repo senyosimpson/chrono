@@ -6,25 +6,22 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
-use crate::runtime::queue::Queue;
-use crate::runtime::timer_queue;
-use crate::time::Instant;
-
 use super::cell::UninitCell;
 use super::header::Header;
 use super::state::State;
 use super::task::Task;
+use crate::runtime::queue::{TaskQueue, TimerQueue};
+use crate::time::Instant;
 
 #[repr(C)]
 pub struct Memory<F: Future<Output = T>, T> {
     /// Header of the task. Contains data related to the state
     /// of a task
     pub header: UninitCell<Header>,
-    /// Scheduler is responsible for scheduling tasks onto the
-    /// runtime. When a task is woken, it calls the related
-    /// scheduler to schedule itself
-    pub scheduler: RefCell<*mut Queue>,
-    pub timer_queue: RefCell<*mut timer_queue::Queue>,
+    /// Pointer to the runtime task queue
+    pub(crate) task_queue: RefCell<NonNull<TaskQueue>>,
+    /// Pointer to the runtime timer queue
+    pub(crate) timer_queue: RefCell<NonNull<TimerQueue>>,
     /// The status of a task. This is either a future or the
     /// output of a future
     pub status: UninitCell<Status<F, T>>,
@@ -61,8 +58,8 @@ where
     pub const fn alloc() -> Self {
         Memory {
             header: UninitCell::uninit(),
-            scheduler: RefCell::new(core::ptr::null_mut()),
-            timer_queue: RefCell::new(core::ptr::null_mut()),
+            task_queue: RefCell::new(NonNull::dangling()),
+            timer_queue: RefCell::new(NonNull::dangling()),
             status: UninitCell::uninit(),
         }
     }
@@ -111,7 +108,7 @@ where
         let header = Header {
             task,
             state: State::new_with_id(task_id),
-            timer_expiry: None,
+            expiry: None,
             waker: None,
             vtable: &TaskVTable {
                 poll: Self::poll,
@@ -172,9 +169,9 @@ where
         let raw = Self::from_ptr(ptr);
         let memory = raw.memory();
 
-        let task_ptr = memory.task() as *const _ as *mut Task;
-        let scheduler = memory.scheduler.borrow_mut();
-        scheduler.as_mut().unwrap().push_back(task_ptr);
+        let task = NonNull::new_unchecked(memory.task() as *const _ as *mut Task);
+        let mut task_queue = memory.task_queue.borrow_mut();
+        task_queue.as_mut().push_back(task);
     }
 
     unsafe fn schedule_timer(ptr: *const (), deadline: Instant) {
@@ -182,13 +179,11 @@ where
         let memory = raw.memory();
         let header = memory.mut_header();
 
-        header.timer_expiry = Some(deadline);
+        header.expiry = Some(deadline);
 
-        let task_ptr = memory.task() as *const _ as *mut Task;
-        let timer_queue = memory.timer_queue.borrow_mut();
-        // TODO We need to store that a task failed to be scheduled in the
-        // state or something of that kind
-        timer_queue.as_mut().unwrap().push_back(task_ptr);
+        let task = NonNull::new_unchecked(memory.task() as *const _ as *mut Task);
+        let mut timer_queue = memory.timer_queue.borrow_mut();
+        timer_queue.as_mut().push_back(task);
     }
 
     // Runs the future and updates its state

@@ -4,12 +4,10 @@ use core::marker::PhantomData;
 use core::ptr::NonNull;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
-use super::queue::Queue;
-use super::timer_queue::Queue as TimerQueue;
-use super::{context, timer_queue};
+use super::context;
+use super::queue::{TaskQueue, TimerQueue};
 use crate::task::join::JoinHandle;
 use crate::task::RawTask;
-use crate::task::Task;
 use crate::time::instant::Instant;
 
 pub struct Runtime {
@@ -21,9 +19,9 @@ pub struct Runtime {
 
 struct Inner {
     /// Queue that holds tasks
-    queue: *mut Queue,
+    tasks: NonNull<TaskQueue>,
     /// Queue that holds timers
-    timer_queue: *mut TimerQueue,
+    timers: NonNull<TimerQueue>,
 }
 
 /// Handle to the runtime
@@ -33,10 +31,13 @@ pub struct Handle {
     pub(crate) spawner: Spawner,
 }
 
+/// Spawns tasks onto the executor
 #[derive(Clone, Copy)]
 pub struct Spawner {
-    pub(crate) queue: *mut Queue,
-    pub(crate) timer_queue: *mut timer_queue::Queue,
+    /// Queue that holds tasks
+    tasks: NonNull<TaskQueue>,
+    /// Queue that holds timers
+    timers: NonNull<TimerQueue>,
 }
 
 // ===== impl Runtime =====
@@ -44,23 +45,19 @@ pub struct Spawner {
 impl Runtime {
     #[allow(non_upper_case_globals)]
     pub fn new() -> Runtime {
-        // Initialise time driver
-        context::time_driver().init();
+        let time_driver = context::time_driver();
+        time_driver.init();
 
-        static mut queue: Queue = Queue::new(); // "alloc" queue
+        static mut task_queue: TaskQueue = TaskQueue::new();
         static mut timer_queue: TimerQueue = TimerQueue::new();
-        let queue_ptr = unsafe { &queue as *const _ as *mut Queue };
-        let timer_queue_ptr = unsafe { &timer_queue as *const _ as *mut TimerQueue };
 
-        let inner = RefCell::new(Inner {
-            queue: queue_ptr,
-            timer_queue: timer_queue_ptr,
-        });
+        // Pointers to task and timer queues
+        let tasks = unsafe { NonNull::new_unchecked(&task_queue as *const _ as *mut _) };
+        let timers = unsafe { NonNull::new_unchecked(&timer_queue as *const _ as *mut _) };
 
-        let spawner = Spawner {
-            queue: queue_ptr,
-            timer_queue: timer_queue_ptr,
-        };
+        let inner = RefCell::new(Inner { tasks, timers });
+
+        let spawner = Spawner { tasks, timers };
         let handle = Handle { spawner };
 
         Runtime { inner, handle }
@@ -104,17 +101,15 @@ impl Inner {
             }
             defmt::debug!("`block_on` future pending");
 
-            let queue = unsafe { &mut (*self.queue) };
-            if queue.is_empty() {
+            let task_queue = unsafe { self.tasks.as_mut() };
+            if task_queue.is_empty() {
                 defmt::debug!("Queue empty. Waiting for event");
                 cortex_m::asm::wfe()
             }
 
-            // Process timers. Populates the queue with tasks that are ready to execute
-            let timer_queue = unsafe { &mut (*self.timer_queue) };
-            let time_driver = context::time_driver();
+            let timer_queue = unsafe { self.timers.as_mut() };
             let now = Instant::now();
-            time_driver.process(now);
+            timer_queue.process(now);
 
             // Start the timer
             // NOTE: This will cause issues because initially, it will only start timing down
@@ -126,7 +121,7 @@ impl Inner {
             }
 
             loop {
-                let task = queue.pop();
+                let task = task_queue.pop();
                 match task {
                     Some(task) => {
                         defmt::debug!("Task {}: Popped off executor queue and running", task.id);
@@ -163,8 +158,8 @@ impl Spawner {
     ) -> Result<JoinHandle<T>, SpawnError> {
         let memory = raw.memory();
         // We need to write the scheduler into the RawTask
-        memory.scheduler.replace(self.queue);
-        memory.timer_queue.replace(self.timer_queue);
+        memory.task_queue.replace(self.tasks);
+        memory.timer_queue.replace(self.timers);
 
         // pointer to Memory inside of RawTask
         let ptr = unsafe { NonNull::new_unchecked(raw.ptr) };
@@ -176,11 +171,7 @@ impl Spawner {
 
         // Get a pointer to our task to store in the queue
         let task = memory.task();
-        let task_ptr = task as *const _ as *mut Task;
-
-        unsafe {
-            self.queue.as_mut().unwrap().push_back(task_ptr);
-        }
+        task.schedule();
 
         let spawned: Result<(), ()> = Ok(());
         if spawned.is_err() {

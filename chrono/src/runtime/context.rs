@@ -44,7 +44,7 @@ impl Drop for EnterGuard {
 }
 
 /// Sets this [`Handle`] as the current [`Handle`]. Returns an
-/// [`EnterGuard`] which clears thread local storage once dropped
+/// [`EnterGuard`] which clears the context when dropped
 pub(super) fn enter(new: Handle) -> EnterGuard {
     CONTEXT.with(|ctx| ctx.replace(Some(new)));
     EnterGuard {}

@@ -5,8 +5,6 @@ use stm32f3xx_hal::prelude::*;
 use stm32f3xx_hal::timer::{Event, Timer};
 
 use super::duration::Duration;
-use super::queue::Queue;
-use super::Instant;
 
 pub(crate) static mut DRIVER: Driver = Driver::new();
 
@@ -18,8 +16,6 @@ pub struct Driver {
 
 struct Inner {
     timer: Timer<pac::TIM2>,
-    queue: Queue,
-    deadline: Instant,
 }
 
 pub fn driver() -> &'static mut Driver {
@@ -63,27 +59,7 @@ impl Driver {
         })
     }
 
-    pub fn deadline(&self) -> Option<Instant> {
-        let inner = self.inner.as_ref().unwrap().borrow();
-        if inner.deadline != Instant::max() {
-            Some(inner.deadline)
-        } else {
-            None
-        }
-    }
 
-    pub fn process(&mut self, now: Instant) {
-        let mut inner = self.inner.as_ref().unwrap().borrow_mut();
-        let deadline = inner.process(now);
-
-        drop(inner);
-
-        if let Some(d) = deadline {
-            let dur = d - Instant::now();
-            self.start(dur);
-            defmt::debug!("Started timer. Deadline in {}", dur);
-        }
-    }
 }
 
 impl Inner {
@@ -121,18 +97,7 @@ impl Inner {
         // Enable timer interrupt
         timer.enable_interrupt(Event::Update);
 
-        let queue = Queue::new();
-        let deadline = Instant::max();
-
-        Inner {
-            timer,
-            queue,
-            deadline,
-        }
-    }
-
-    pub fn process(&mut self, now: Instant) -> Option<Instant> {
-        self.queue.process(now)
+        Inner { timer }
     }
 }
 
