@@ -7,7 +7,7 @@ check:
 
 # Run cargo examples
 example ex:
-  cargo run --example {{ex}}
+  DEFMT_LOG=debug cargo run --example {{ex}}
 
 # List all examples
 list-examples:

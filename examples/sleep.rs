@@ -31,7 +31,7 @@ fn main() -> ! {
 
         let later = Instant::now();
         let elapsed = later - now;
-        defmt::info!("Woke from sleep! {} elapsed", elapsed.as_secs());
+        defmt::info!("Woke from sleep! {} seconds elapsed", elapsed.as_secs());
     });
 
     defmt::info!("Success!");
