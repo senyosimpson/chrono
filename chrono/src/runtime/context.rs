@@ -9,8 +9,7 @@ static CONTEXT: Context = Context::new();
 #[derive(Clone)]
 pub(crate) struct Context(Cell<Option<Handle>>);
 
-// Since we are in a single-threaded environment, it is safe to implement
-// this trait this even though the Cell we are using is not thread safe
+// Safe since we are in a single-threaded environment
 unsafe impl Sync for Context {}
 
 impl Context {

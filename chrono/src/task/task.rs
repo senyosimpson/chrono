@@ -119,9 +119,7 @@ impl Display for TaskId {
 #[derive(Default)]
 struct Counter(Cell<u64>);
 
-// Implement sync for counter to enable it to be used as
-// a static. It is safe to do so because we aren't sharing
-// it across threads
+// Safe since we are in a single-threaded environment
 unsafe impl Sync for Counter {}
 
 impl Counter {
