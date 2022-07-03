@@ -18,7 +18,8 @@ async fn delay() {
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
-    let rt = Runtime::new();
+    static mut rt: Runtime = Runtime::new();
+
     rt.block_on(async {
         let now = Instant::now();
         let res = chrono::spawn(delay());
