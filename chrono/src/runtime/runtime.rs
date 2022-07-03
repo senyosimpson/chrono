@@ -10,9 +10,9 @@ use crate::task::RawTask;
 use crate::time::instant::Instant;
 
 pub struct Runtime {
-    /// Queue that holds tasks
+    /// Queue of tasks
     pub(crate) tasks: TaskQueue,
-    /// Queue that holds timers
+    /// Queue of timers
     pub(crate) timers: TimerQueue,
 }
 
@@ -39,28 +39,24 @@ impl Runtime {
         Runtime { tasks, timers }
     }
 
-    // // Get the handle to the runtime
+    /// Get the handle to the runtime
     pub fn handle(&'static self) -> Handle {
         Handle {
-            spawner: self.spawner(),
+            spawner: Spawner { rt: self },
         }
     }
 
-    pub fn spawner(&'static self) -> Spawner {
-        Spawner { rt: self }
-    }
-
-    // Spawn a task onto the runtime
+    /// Spawn a task onto the runtime
     pub fn spawn<F: Future<Output = T>, T>(
         &'static self,
         raw: RawTask<F, T>,
     ) -> Result<JoinHandle<T>, SpawnError> {
-        self.spawner().spawn(raw)
+        self.handle().spawn(raw)
     }
 
     pub fn block_on<F: Future>(&'static self, future: F) -> F::Output {
         // Setup time drivers
-        // TODO: Can we do this on new() instead?
+        // TODO: Create a macro that handles this initialisation
         let time_driver = context::time_driver();
         time_driver.init();
 
@@ -81,17 +77,17 @@ impl Runtime {
             }
             defmt::debug!("`block_on` future pending");
 
+            // If the task queue is empty, wait for an event/interrupt
             if self.tasks.is_empty() {
                 defmt::debug!("Queue empty. Waiting for event");
                 cortex_m::asm::wfe()
             }
 
+            // Process all timers
             let now = Instant::now();
             self.timers.process(now);
 
-            // Start the timer
-            // NOTE: This will cause issues because initially, it will only start timing down
-            // once the first batch of tasks have been processed
+            // Start the timer if there is a deadline
             if let Some(deadline) = self.timers.deadline() {
                 let dur = deadline - Instant::now();
                 context::time_driver().start(dur);
@@ -99,7 +95,7 @@ impl Runtime {
             }
 
             loop {
-                let task = self.tasks.pop();
+                let task = self.tasks.pop_front();
                 match task {
                     Some(task) => {
                         defmt::debug!("Task {}: Popped off executor queue and running", task.id);
@@ -112,56 +108,8 @@ impl Runtime {
     }
 }
 
+// Safe since we are in a single-threaded environment
 unsafe impl Sync for Runtime {}
-
-// ===== impl Inner =====
-
-// impl Inner {
-//     pub fn block_on<F: Future>(&mut self, future: F) -> F::Output {
-//         crate::pin!(future);
-
-//         let waker = unsafe { Waker::from_raw(NoopWaker::waker()) };
-//         let cx = &mut Context::from_waker(&waker);
-
-//         loop {
-//             // If the future is ready, return the output
-//             defmt::debug!("Polling `block_on` future");
-//             if let Poll::Ready(v) = future.as_mut().poll(cx) {
-//                 defmt::debug!("`block_on` future ready");
-//                 return v;
-//             }
-//             defmt::debug!("`block_on` future pending");
-
-//             if self.tasks.is_empty() {
-//                 defmt::debug!("Queue empty. Waiting for event");
-//                 cortex_m::asm::wfe()
-//             }
-
-//             let now = Instant::now();
-//             self.timers.process(now);
-
-//             // Start the timer
-//             // NOTE: This will cause issues because initially, it will only start timing down
-//             // once the first batch of tasks have been processed
-//             if let Some(deadline) = self.timers.deadline() {
-//                 let dur = deadline - Instant::now();
-//                 context::time_driver().start(dur);
-//                 defmt::debug!("Started timer. Deadline in {}", dur);
-//             }
-
-//             loop {
-//                 let task = self.tasks.pop();
-//                 match task {
-//                     Some(task) => {
-//                         defmt::debug!("Task {}: Popped off executor queue and running", task.id);
-//                         task.run()
-//                     }
-//                     None => break,
-//                 }
-//             }
-//         }
-//     }
-// }
 
 // ===== impl Handle =====
 

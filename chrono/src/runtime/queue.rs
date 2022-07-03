@@ -43,6 +43,7 @@ impl DerefMut for TaskQueue {
     }
 }
 
+// Safe since we are in a single-threaded environment
 unsafe impl Sync for TaskQueue {}
 
 // ===== impl TimerQueue =====
@@ -59,6 +60,10 @@ impl TimerQueue {
         self.deadline.get()
     }
 
+    /// Process all timers in the timer queue. If a timer has expired, the
+    /// task will be scheduled onto the runtime.
+    /// We also take this opportunity to update the deadline, setting it to
+    /// the shortest remaining time of all the timers in the queue
     pub fn process(&self, now: Instant) {
         let mut deadline = Instant::max();
 
@@ -95,7 +100,7 @@ impl TimerQueue {
 
                 // We are some random element in the middle.
                 unsafe {
-                    // TODO: Better error handling
+                    // Safe to unwrap because we've already checked we aren't the head or tail
                     let mut next = curr.timers.next().unwrap();
                     let mut prev = curr.timers.next().unwrap();
 
@@ -159,6 +164,7 @@ impl DerefMut for TimerQueue {
     }
 }
 
+// Safe since we are in a single-threaded environment
 unsafe impl Sync for TimerQueue {}
 
 // ===== impl LinkedList =====
@@ -171,10 +177,12 @@ impl LinkedList {
         }
     }
 
+    /// Is the list empty?
     pub fn is_empty(&self) -> bool {
         self.head.get().is_none()
     }
-
+    
+    /// Add an element to the back of list
     pub fn push_back(&mut self, task: NonNull<Task>) {
         defmt::debug!("Inserting into task queue");
         unsafe {
@@ -189,7 +197,8 @@ impl LinkedList {
         }
     }
 
-    pub fn pop(&self) -> Option<&mut Task> {
+    /// Pop an item off the front of the list
+    pub fn pop_front(&self) -> Option<&mut Task> {
         match self.head.get() {
             None => None,
             Some(mut head) => {
@@ -202,9 +211,8 @@ impl LinkedList {
                     return Some(curr);
                 }
 
-                // We need to update references
-                // Set the head to the next timer the current
-                // head is pointing to
+                // Set the head to the next timer the current head
+                // is pointing to
                 self.head.replace(curr.tasks.next());
                 // Set next timer in the current task to null
                 curr.tasks.set_next(None);

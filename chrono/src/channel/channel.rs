@@ -130,6 +130,4 @@ impl<T, const N: usize> Channel<T, N> {
     }
 }
 
-// SAFETY: This executor is single-threaded, thus making it safe to
-// implement Sync
 unsafe impl<T, const N: usize> Sync for Channel<T, N> {}
