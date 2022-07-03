@@ -1,24 +1,22 @@
+use core::cell::Cell;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
 
 use crate::task::Task;
 use crate::time::Instant;
 
-#[derive(Clone, Copy)]
 pub(crate) struct TaskQueue {
     list: LinkedList,
 }
 
-#[derive(Clone, Copy)]
 pub(crate) struct TimerQueue {
     list: LinkedList,
-    deadline: Option<Instant>,
+    deadline: Cell<Option<Instant>>,
 }
 
-#[derive(Clone, Copy)]
 pub(crate) struct LinkedList {
-    pub head: Option<NonNull<Task>>,
-    pub tail: Option<NonNull<Task>>,
+    pub head: Cell<Option<NonNull<Task>>>,
+    pub tail: Cell<Option<NonNull<Task>>>,
 }
 
 // ===== impl TaskQueue =====
@@ -53,18 +51,18 @@ impl TimerQueue {
     pub const fn new() -> TimerQueue {
         TimerQueue {
             list: LinkedList::new(),
-            deadline: None,
+            deadline: Cell::new(None),
         }
     }
 
     pub fn deadline(&self) -> Option<Instant> {
-        self.deadline
+        self.deadline.get()
     }
 
-    pub fn process(&mut self, now: Instant) {
+    pub fn process(&self, now: Instant) {
         let mut deadline = Instant::max();
 
-        let mut curr = match self.head {
+        let mut curr = match self.head.get() {
             None => return,
             Some(mut curr) => unsafe { curr.as_mut() },
         };
@@ -77,8 +75,8 @@ impl TimerQueue {
                 // If the next entry is null, we are the tail
                 if curr.timers.next().is_none() {
                     // Set head and tail to None, nothing more to process
-                    self.head = None;
-                    self.tail = None;
+                    self.head.replace(None);
+                    self.tail.replace(None);
                     // Schedule the task associated with the timer
                     curr.schedule();
                     break;
@@ -87,11 +85,11 @@ impl TimerQueue {
                 // If the previous entry is null, we are the head
                 if curr.timers.prev().is_none() {
                     // Move the head forward
-                    self.head = curr.timers.next();
+                    self.head.replace(curr.timers.next());
                     // Schedule the task associated with the timer
                     curr.schedule();
                     // Set curr to the new head for the next loop
-                    curr = unsafe { self.head.unwrap().as_mut() };
+                    curr = unsafe { self.head.get().unwrap().as_mut() };
                     continue;
                 }
 
@@ -140,9 +138,9 @@ impl TimerQueue {
         }
 
         if deadline != Instant::max() {
-            self.deadline = Some(deadline)
+            self.deadline.replace(Some(deadline));
         } else {
-            self.deadline = None
+            self.deadline.replace(None);
         }
     }
 }
@@ -168,46 +166,46 @@ unsafe impl Sync for TimerQueue {}
 impl LinkedList {
     pub const fn new() -> LinkedList {
         LinkedList {
-            head: None,
-            tail: None,
+            head: Cell::new(None),
+            tail: Cell::new(None),
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.head.is_none()
+        self.head.get().is_none()
     }
 
     pub fn push_back(&mut self, task: NonNull<Task>) {
         defmt::debug!("Inserting into task queue");
         unsafe {
-            if let Some(mut tail) = self.tail {
+            if let Some(mut tail) = self.tail.get() {
                 tail.as_mut().tasks.set_next(Some(task));
-                self.tail = Some(task);
+                self.tail.replace(Some(task));
                 return;
             }
 
-            self.head = Some(task);
-            self.tail = Some(task);
+            self.head.replace(Some(task));
+            self.tail.replace(Some(task));
         }
     }
 
-    pub fn pop(&mut self) -> Option<&mut Task> {
-        match self.head {
+    pub fn pop(&self) -> Option<&mut Task> {
+        match self.head.get() {
             None => None,
             Some(mut head) => {
                 let curr = unsafe { head.as_mut() };
                 if curr.tasks.next().is_none() {
                     // We are on the last element in the queue. Set
                     // head and tail to None and return the task
-                    self.head = None;
-                    self.tail = None;
+                    self.head.replace(None);
+                    self.tail.replace(None);
                     return Some(curr);
                 }
 
                 // We need to update references
                 // Set the head to the next timer the current
                 // head is pointing to
-                self.head = curr.tasks.next();
+                self.head.replace(curr.tasks.next());
                 // Set next timer in the current task to null
                 curr.tasks.set_next(None);
                 // Return the current task

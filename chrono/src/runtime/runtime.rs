@@ -1,4 +1,3 @@
-use core::cell::RefCell;
 use core::future::Future;
 use core::marker::PhantomData;
 use core::ptr::NonNull;
@@ -11,17 +10,10 @@ use crate::task::RawTask;
 use crate::time::instant::Instant;
 
 pub struct Runtime {
-    // Holds the task queue
-    inner: RefCell<Inner>,
-    // Handle to runtime
-    handle: Handle,
-}
-
-struct Inner {
     /// Queue that holds tasks
-    tasks: NonNull<TaskQueue>,
+    pub(crate) tasks: TaskQueue,
     /// Queue that holds timers
-    timers: NonNull<TimerQueue>,
+    pub(crate) timers: TimerQueue,
 }
 
 /// Handle to the runtime
@@ -34,59 +26,47 @@ pub struct Handle {
 /// Spawns tasks onto the executor
 #[derive(Clone, Copy)]
 pub struct Spawner {
-    /// Queue that holds tasks
-    tasks: NonNull<TaskQueue>,
-    /// Queue that holds timers
-    timers: NonNull<TimerQueue>,
+    rt: &'static Runtime,
 }
 
 // ===== impl Runtime =====
 
 impl Runtime {
-    #[allow(non_upper_case_globals)]
-    pub fn new() -> Runtime {
-        let time_driver = context::time_driver();
-        time_driver.init();
+    pub const fn new() -> Runtime {
+        let tasks = TaskQueue::new();
+        let timers = TimerQueue::new();
 
-        static mut task_queue: TaskQueue = TaskQueue::new();
-        static mut timer_queue: TimerQueue = TimerQueue::new();
-
-        // Pointers to task and timer queues
-        let tasks = unsafe { NonNull::new_unchecked(&task_queue as *const _ as *mut _) };
-        let timers = unsafe { NonNull::new_unchecked(&timer_queue as *const _ as *mut _) };
-
-        let inner = RefCell::new(Inner { tasks, timers });
-
-        let spawner = Spawner { tasks, timers };
-        let handle = Handle { spawner };
-
-        Runtime { inner, handle }
+        Runtime { tasks, timers }
     }
 
-    // Get the handle to the runtime
-    pub fn handle(&self) -> &Handle {
-        &self.handle
+    // // Get the handle to the runtime
+    pub fn handle(&'static self) -> Handle {
+        Handle {
+            spawner: self.spawner(),
+        }
+    }
+
+    pub fn spawner(&'static self) -> Spawner {
+        Spawner { rt: self }
     }
 
     // Spawn a task onto the runtime
     pub fn spawn<F: Future<Output = T>, T>(
-        &self,
+        &'static self,
         raw: RawTask<F, T>,
     ) -> Result<JoinHandle<T>, SpawnError> {
-        self.handle.spawn(raw)
+        self.spawner().spawn(raw)
     }
 
-    pub fn block_on<F: Future>(&self, future: F) -> F::Output {
+    pub fn block_on<F: Future>(&'static self, future: F) -> F::Output {
+        // Setup time drivers
+        // TODO: Can we do this on new() instead?
+        let time_driver = context::time_driver();
+        time_driver.init();
+
         // Enter runtime context
-        let _enter = context::enter(self.handle);
-        self.inner.borrow_mut().block_on(future)
-    }
-}
+        let _enter = context::enter(self.handle());
 
-// ===== impl Inner =====
-
-impl Inner {
-    pub fn block_on<F: Future>(&mut self, future: F) -> F::Output {
         crate::pin!(future);
 
         let waker = unsafe { Waker::from_raw(NoopWaker::waker()) };
@@ -101,27 +81,25 @@ impl Inner {
             }
             defmt::debug!("`block_on` future pending");
 
-            let task_queue = unsafe { self.tasks.as_mut() };
-            if task_queue.is_empty() {
+            if self.tasks.is_empty() {
                 defmt::debug!("Queue empty. Waiting for event");
                 cortex_m::asm::wfe()
             }
 
-            let timer_queue = unsafe { self.timers.as_mut() };
             let now = Instant::now();
-            timer_queue.process(now);
+            self.timers.process(now);
 
             // Start the timer
             // NOTE: This will cause issues because initially, it will only start timing down
             // once the first batch of tasks have been processed
-            if let Some(deadline) = timer_queue.deadline() {
+            if let Some(deadline) = self.timers.deadline() {
                 let dur = deadline - Instant::now();
                 context::time_driver().start(dur);
                 defmt::debug!("Started timer. Deadline in {}", dur);
             }
 
             loop {
-                let task = task_queue.pop();
+                let task = self.tasks.pop();
                 match task {
                     Some(task) => {
                         defmt::debug!("Task {}: Popped off executor queue and running", task.id);
@@ -133,6 +111,57 @@ impl Inner {
         }
     }
 }
+
+unsafe impl Sync for Runtime {}
+
+// ===== impl Inner =====
+
+// impl Inner {
+//     pub fn block_on<F: Future>(&mut self, future: F) -> F::Output {
+//         crate::pin!(future);
+
+//         let waker = unsafe { Waker::from_raw(NoopWaker::waker()) };
+//         let cx = &mut Context::from_waker(&waker);
+
+//         loop {
+//             // If the future is ready, return the output
+//             defmt::debug!("Polling `block_on` future");
+//             if let Poll::Ready(v) = future.as_mut().poll(cx) {
+//                 defmt::debug!("`block_on` future ready");
+//                 return v;
+//             }
+//             defmt::debug!("`block_on` future pending");
+
+//             if self.tasks.is_empty() {
+//                 defmt::debug!("Queue empty. Waiting for event");
+//                 cortex_m::asm::wfe()
+//             }
+
+//             let now = Instant::now();
+//             self.timers.process(now);
+
+//             // Start the timer
+//             // NOTE: This will cause issues because initially, it will only start timing down
+//             // once the first batch of tasks have been processed
+//             if let Some(deadline) = self.timers.deadline() {
+//                 let dur = deadline - Instant::now();
+//                 context::time_driver().start(dur);
+//                 defmt::debug!("Started timer. Deadline in {}", dur);
+//             }
+
+//             loop {
+//                 let task = self.tasks.pop();
+//                 match task {
+//                     Some(task) => {
+//                         defmt::debug!("Task {}: Popped off executor queue and running", task.id);
+//                         task.run()
+//                     }
+//                     None => break,
+//                 }
+//             }
+//         }
+//     }
+// }
 
 // ===== impl Handle =====
 
@@ -157,9 +186,9 @@ impl Spawner {
         raw: RawTask<F, T>,
     ) -> Result<JoinHandle<T>, SpawnError> {
         let memory = raw.memory();
-        // We need to write the scheduler into the RawTask
-        memory.task_queue.replace(self.tasks);
-        memory.timer_queue.replace(self.timers);
+
+        let rt = unsafe { NonNull::new_unchecked(self.rt as *const _ as *mut _) };
+        memory.rt.replace(rt);
 
         // pointer to Memory inside of RawTask
         let ptr = unsafe { NonNull::new_unchecked(raw.ptr) };

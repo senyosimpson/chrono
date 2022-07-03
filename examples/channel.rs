@@ -28,7 +28,7 @@ async fn receive(rx: Receiver<'static, &str, chan_size>) {
 #[allow(non_upper_case_globals)]
 #[cortex_m_rt::entry]
 fn main() -> ! {
-    let rt = Runtime::new();
+    static mut rt: Runtime = Runtime::new();
 
     rt.block_on(async {
         static channel: Channel<&str, chan_size> = mpsc::channel();

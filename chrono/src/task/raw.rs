@@ -1,4 +1,4 @@
-use core::cell::RefCell;
+use core::cell::Cell;
 use core::future::Future;
 use core::marker::PhantomData;
 use core::mem;
@@ -10,7 +10,7 @@ use super::cell::UninitCell;
 use super::header::Header;
 use super::state::State;
 use super::task::Task;
-use crate::runtime::queue::{TaskQueue, TimerQueue};
+use crate::Runtime;
 use crate::time::Instant;
 
 #[repr(C)]
@@ -18,10 +18,8 @@ pub struct Memory<F: Future<Output = T>, T> {
     /// Header of the task. Contains data related to the state
     /// of a task
     pub header: UninitCell<Header>,
-    /// Pointer to the runtime task queue
-    pub(crate) task_queue: RefCell<NonNull<TaskQueue>>,
-    /// Pointer to the runtime timer queue
-    pub(crate) timer_queue: RefCell<NonNull<TimerQueue>>,
+    /// Pointer to the executor
+    pub(crate) rt: Cell<NonNull<Runtime>>,
     /// The status of a task. This is either a future or the
     /// output of a future
     pub status: UninitCell<Status<F, T>>,
@@ -58,8 +56,7 @@ where
     pub const fn alloc() -> Self {
         Memory {
             header: UninitCell::uninit(),
-            task_queue: RefCell::new(NonNull::dangling()),
-            timer_queue: RefCell::new(NonNull::dangling()),
+            rt: Cell::new(NonNull::dangling()),
             status: UninitCell::uninit(),
         }
     }
@@ -170,8 +167,8 @@ where
         let memory = raw.memory();
 
         let task = NonNull::new_unchecked(memory.task() as *const _ as *mut Task);
-        let mut task_queue = memory.task_queue.borrow_mut();
-        task_queue.as_mut().push_back(task);
+        let mut rt = memory.rt.get();
+        rt.as_mut().tasks.push_back(task);
     }
 
     unsafe fn schedule_timer(ptr: *const (), deadline: Instant) {
@@ -182,8 +179,8 @@ where
         header.expiry = Some(deadline);
 
         let task = NonNull::new_unchecked(memory.task() as *const _ as *mut Task);
-        let mut timer_queue = memory.timer_queue.borrow_mut();
-        timer_queue.as_mut().push_back(task);
+        let mut rt = memory.rt.get();
+        rt.as_mut().timers.push_back(task);
     }
 
     // Runs the future and updates its state
