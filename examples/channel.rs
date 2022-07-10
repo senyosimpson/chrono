@@ -25,15 +25,11 @@ async fn receive(rx: Receiver<'static, &str, chan_size>) {
     defmt::info!("Received message: {}", rx.recv().await.unwrap());
 }
 
-#[allow(non_upper_case_globals)]
-#[cortex_m_rt::entry]
-fn main() -> ! {
-    static mut rt: Runtime = Runtime::new();
+#[chrono::main]
+async fn main() -> ! {
+        static CHANNEL: Channel<&str, chan_size> = mpsc::channel();
 
-    rt.block_on(async {
-        static channel: Channel<&str, chan_size> = mpsc::channel();
-
-        let (tx, rx) = mpsc::split(&channel);
+        let (tx, rx) = mpsc::split(&CHANNEL);
         let res = chrono::spawn(send(tx));
         let handle = match res {
             Ok(handle) => handle,
@@ -47,10 +43,6 @@ fn main() -> ! {
             Err(_) => panic!("Could not spawn task!"),
         };
         let _output = handle.await;
-    });
 
     defmt::info!("Success!");
-    loop {
-        cortex_m::asm::bkpt();
-    }
 }

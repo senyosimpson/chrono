@@ -2,12 +2,11 @@ use proc_macro::TokenStream;
 use quote::quote;
 
 pub(super) fn main(f: syn::ItemFn) -> TokenStream {
-    let fn_args = f.sig.inputs.clone();
     let fn_body = f.block;
 
     let hal_setup = quote! {
         use ::chrono::hal::prelude::*;
-        let peripherals = ::chrono::hal::pac::Peripherals::take().unwrap();
+        let peripherals = ::chrono::hal::pac::Peripherals::steal();
 
         // This is a workaround, so that the debugger will not disconnect immediately on asm::wfe();
         // https://github.com/probe-rs/probe-rs/issues/350#issuecomment-740550519
@@ -24,7 +23,7 @@ pub(super) fn main(f: syn::ItemFn) -> TokenStream {
         let clocks = cfg.freeze(&mut flash.acr);
 
         // Setup mono timer. Copied from MonoTimer::new() in stm32 hal crate
-        let mut core_peripherals = ::chrono::hal::pac::CorePeripherals::take().unwrap();
+        let mut core_peripherals = ::chrono::hal::pac::CorePeripherals::steal();
         core_peripherals.DCB.enable_trace();
         core_peripherals.DWT.enable_cycle_counter();
         drop(core_peripherals.DWT);
@@ -34,14 +33,14 @@ pub(super) fn main(f: syn::ItemFn) -> TokenStream {
     };
 
     quote! {
-        async fn fut(#fn_args) #fn_body
+        async fn fut() #fn_body
 
         #[cortex_m_rt::entry]
         unsafe fn main() -> ! {
             #hal_setup
 
             static mut RT: ::chrono::Runtime = ::chrono::Runtime::new();
-            RT.block_on(fut(peripherals));
+            RT.block_on(fut());
 
             loop {
                 cortex_m::asm::bkpt();
