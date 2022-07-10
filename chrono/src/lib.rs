@@ -15,6 +15,7 @@ pub mod time;
 
 // Re-exports
 pub use chrono_macros::alloc;
+pub use chrono_macros::main;
 
 pub use futures_util::join;
 pub use futures_util::pin_mut as pin;
