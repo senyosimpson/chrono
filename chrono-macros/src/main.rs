@@ -6,6 +6,7 @@ pub(super) fn main(f: syn::ItemFn) -> TokenStream {
 
     let hal_setup = quote! {
         use ::chrono::hal::prelude::*;
+        use ::chrono::time;
         let peripherals = ::chrono::hal::pac::Peripherals::steal();
 
         // This is a workaround, so that the debugger will not disconnect immediately on asm::wfe();
@@ -29,7 +30,7 @@ pub(super) fn main(f: syn::ItemFn) -> TokenStream {
         drop(core_peripherals.DWT);
 
         // init time driver
-        ::chrono::time::driver().init(peripherals.TIM2, clocks, &mut rcc.apb1);
+        time::driver().init(peripherals.TIM2, clocks, &mut rcc.apb1);
     };
 
     quote! {
