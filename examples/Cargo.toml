@@ -2,7 +2,7 @@
 name = "examples"
 version = "0.0.0"
 authors = ["SenYeezus <simpsonsenyo@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 chrono = { path = "../chrono"}
