@@ -51,7 +51,7 @@ impl Driver {
 
     pub fn handle_interrupt(&mut self) {
         cortex_m::interrupt::free(|_cs| {
-            defmt::debug!("INTERRUPT");
+            defmt::debug!("Interrupt triggered!");
             let mut inner = self.inner.as_ref().unwrap().borrow_mut();
             inner.timer.clear_event(Event::Update);
             inner.timer.stop();
@@ -64,25 +64,6 @@ impl Driver {
 
 impl Inner {
     pub fn new(tim: TIM2, clocks: Clocks, apb: &mut <TIM2 as rcc::RccBus>::Bus) -> Inner {
-        // TODO: This should actually take in peripherals since we will have more
-        // than one at some point
-        // let peripherals = Peripherals::take().unwrap();
-
-        // This is a workaround, so that the debugger will not disconnect immediately on asm::wfe();
-        // https://github.com/probe-rs/probe-rs/issues/350#issuecomment-740550519
-        // peripherals.DBGMCU.cr.modify(|_, w| {
-        //     w.dbg_sleep().set_bit();
-        //     w.dbg_standby().set_bit();
-        //     w.dbg_stop().set_bit()
-        // });
-
-        // let mut core_peripherals = CorePeripherals::take().unwrap();
-
-        // let mut rcc = peripherals.RCC.constrain();
-        // let cfg = rcc.cfgr.hclk(1.MHz());
-        // let mut flash = peripherals.FLASH.constrain();
-        // let clocks = cfg.freeze(&mut flash.acr);
-
         let mut timer = Timer::new(tim, clocks, apb);
 
         // Enable timer interrupts on the chip itself
