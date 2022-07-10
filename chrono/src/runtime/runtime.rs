@@ -55,11 +55,6 @@ impl Runtime {
     }
 
     pub fn block_on<F: Future>(&'static self, future: F) -> F::Output {
-        // Setup time drivers
-        // TODO: Create a macro that handles this initialisation
-        let time_driver = context::time_driver();
-        time_driver.init();
-
         // Enter runtime context
         let _enter = context::enter(self.handle());
 
