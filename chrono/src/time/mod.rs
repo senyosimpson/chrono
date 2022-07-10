@@ -1,4 +1,5 @@
-pub(crate) mod driver;
+mod driver;
+pub use driver::{driver, Driver};
 
 mod duration;
 pub use duration::Duration;

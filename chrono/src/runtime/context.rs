@@ -2,7 +2,7 @@ use core::cell::Cell;
 
 use super::runtime::Handle;
 use super::runtime::Spawner;
-use crate::time::driver::{self, Driver};
+use crate::time::{self, Driver};
 
 static CONTEXT: Context = Context::new();
 
@@ -56,5 +56,5 @@ pub(crate) fn spawner() -> Spawner {
 }
 
 pub(crate) fn time_driver() -> &'static mut Driver {
-    driver::driver()
+    time::driver()
 }
