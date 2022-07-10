@@ -11,8 +11,7 @@ example ex:
 
 # Print output of Rust macro
 expand-macro ex:
-  cd {{justfile_directory()}}
-  cargo expand --example ex
+  cargo expand --example {{ex}}
 
 # List all examples
 list-examples:
