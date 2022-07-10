@@ -7,7 +7,7 @@ pub(super) fn main(f: syn::ItemFn) -> TokenStream {
 
     let hal_setup = quote! {
         use ::chrono::hal::prelude::*;
-        let peripherals = ::chrono::hal::Peripherals::take().unwrap();
+        let peripherals = ::chrono::hal::pac::Peripherals::take().unwrap();
 
         // This is a workaround, so that the debugger will not disconnect immediately on asm::wfe();
         // https://github.com/probe-rs/probe-rs/issues/350#issuecomment-740550519
@@ -23,8 +23,8 @@ pub(super) fn main(f: syn::ItemFn) -> TokenStream {
         let mut flash = peripherals.FLASH.constrain();
         let clocks = cfg.freeze(&mut flash.acr);
 
-        // Setup mono timer. Copied from MonoTimer::new() in hal crate
-        let mut core_peripherals = ::chrono::hal::CorePeripherals::take().unwrap();
+        // Setup mono timer. Copied from MonoTimer::new() in stm32 hal crate
+        let mut core_peripherals = ::chrono::hal::pac::CorePeripherals::take().unwrap();
         core_peripherals.DCB.enable_trace();
         core_peripherals.DWT.enable_cycle_counter();
         drop(core_peripherals.DWT);
