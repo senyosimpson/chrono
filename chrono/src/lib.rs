@@ -18,3 +18,7 @@ pub use chrono_macros::alloc;
 
 pub use futures_util::join;
 pub use futures_util::pin_mut as pin;
+
+pub mod hal {
+    pub use stm32f3xx_hal::{pac, prelude, rcc, timer};
+}
