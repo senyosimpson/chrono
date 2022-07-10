@@ -1,10 +1,10 @@
 use core::cell::RefCell;
 
-use stm32f3xx_hal::pac::{self, interrupt, CorePeripherals, Peripherals};
-use stm32f3xx_hal::prelude::*;
-use stm32f3xx_hal::timer::{Event, Timer};
-
 use super::duration::Duration;
+use crate::hal::prelude::*;
+use crate::hal::pac::{self, interrupt, TIM2};
+use crate::hal::rcc::{self, Clocks};
+use crate::hal::timer::{Event, Timer};
 
 pub(crate) static mut DRIVER: Driver = Driver::new();
 
@@ -33,8 +33,8 @@ impl Driver {
         }
     }
 
-    pub fn init(&mut self) {
-        self.inner = Some(RefCell::new(Inner::new()));
+    pub fn init(&mut self, tim: TIM2, clocks: Clocks, apb: &mut <TIM2 as rcc::RccBus>::Bus) {
+        self.inner = Some(RefCell::new(Inner::new(tim, clocks, apb)));
         self.initialised = true;
     }
 
@@ -63,32 +63,27 @@ impl Driver {
 }
 
 impl Inner {
-    pub fn new() -> Inner {
+    pub fn new(tim: TIM2, clocks: Clocks, apb: &mut <TIM2 as rcc::RccBus>::Bus) -> Inner {
         // TODO: This should actually take in peripherals since we will have more
         // than one at some point
-        let peripherals = Peripherals::take().unwrap();
+        // let peripherals = Peripherals::take().unwrap();
 
         // This is a workaround, so that the debugger will not disconnect immediately on asm::wfe();
         // https://github.com/probe-rs/probe-rs/issues/350#issuecomment-740550519
-        peripherals.DBGMCU.cr.modify(|_, w| {
-            w.dbg_sleep().set_bit();
-            w.dbg_standby().set_bit();
-            w.dbg_stop().set_bit()
-        });
+        // peripherals.DBGMCU.cr.modify(|_, w| {
+        //     w.dbg_sleep().set_bit();
+        //     w.dbg_standby().set_bit();
+        //     w.dbg_stop().set_bit()
+        // });
 
-        let mut core_peripherals = CorePeripherals::take().unwrap();
+        // let mut core_peripherals = CorePeripherals::take().unwrap();
 
-        let mut rcc = peripherals.RCC.constrain();
-        let cfg = rcc.cfgr.hclk(1.MHz());
-        let mut flash = peripherals.FLASH.constrain();
-        let clocks = cfg.freeze(&mut flash.acr);
+        // let mut rcc = peripherals.RCC.constrain();
+        // let cfg = rcc.cfgr.hclk(1.MHz());
+        // let mut flash = peripherals.FLASH.constrain();
+        // let clocks = cfg.freeze(&mut flash.acr);
 
-        let mut timer = Timer::new(peripherals.TIM2, clocks, &mut rcc.apb1);
-
-        // Setup mono timer. Copied from MonoTimer::new() in hal crate
-        core_peripherals.DCB.enable_trace();
-        core_peripherals.DWT.enable_cycle_counter();
-        drop(core_peripherals.DWT);
+        let mut timer = Timer::new(tim, clocks, apb);
 
         // Enable timer interrupts on the chip itself
         unsafe {
