@@ -8,7 +8,6 @@ use stm32f3 as _;
 
 use chrono::channel::Channel;
 use chrono::mpsc::{self, Receiver, Sender};
-use chrono::Runtime;
 
 #[allow(non_upper_case_globals)]
 const chan_size: usize = 2;
