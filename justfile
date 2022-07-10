@@ -9,6 +9,11 @@ check:
 example ex:
   DEFMT_LOG=debug cargo run --example {{ex}}
 
+# Print output of Rust macro
+expand-macro ex:
+  cd {{justfile_directory()}}
+  cargo expand --example ex
+
 # List all examples
 list-examples:
   #!/usr/bin/env python3
