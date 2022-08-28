@@ -19,18 +19,26 @@ type Ncs = Pin<Gpioa, U<4>, Output<PushPull>>;
 type Int = enc28j60::Unconnected;
 type Reset = Pin<Gpioa, U<3>, Output<PushPull>>;
 
-pub(crate) struct Enc28j60(enc28j60::Enc28j60<Spi, Ncs, Int, Reset>);
+pub struct Enc28j60(enc28j60::Enc28j60<Spi, Ncs, Int, Reset>);
 
 const MTU: usize = 1516;
 
 pub struct RxToken {
     buffer: [u8; MTU],
-    size: u16
+    size: u16,
 }
 
 pub struct TxToken<'a, T: Device<'a>> {
     device: &'a mut T,
     phantom: PhantomData<&'a T>,
+}
+
+/// ===== impl Enc28j60 =====
+
+impl Enc28j60 {
+    pub fn new(device: enc28j60::Enc28j60<Spi, Ncs, Int, Reset>) -> Enc28j60 {
+        Enc28j60(device)
+    }
 }
 
 impl<'a> Device<'a> for Enc28j60 {
@@ -48,18 +56,23 @@ impl<'a> Device<'a> for Enc28j60 {
     }
 
     fn receive(&'a mut self) -> Option<(Self::RxToken, Self::TxToken)> {
-        let mut buffer = [0; MTU];
-        match self.0.receive(&mut buffer) {
-            Ok(size) => {
-                let rx = RxToken { buffer, size };
-                let tx = TxToken {
-                    device: self,
-                    phantom: PhantomData,
-                };
-
-                Some((rx, tx))
+        match self.0.pending_packets() {
+            Err(_) => panic!("failed to check if pending packets"),
+            Ok(n) if n == 0 => None,
+            Ok(_) => {
+                let mut buffer = [0; MTU];
+                match self.0.receive(&mut buffer) {
+                    Ok(size) => {
+                        let rx = RxToken { buffer, size };
+                        let tx = TxToken {
+                            device: self,
+                            phantom: PhantomData,
+                        };
+                        Some((rx, tx))
+                    },
+                    Err(_) => panic!("failed to check if pending packets"),
+                }
             }
-            Err(_) => panic!("recv error!"),
         }
     }
 

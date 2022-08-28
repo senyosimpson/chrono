@@ -3,6 +3,7 @@ use core::ops::{Add, Sub};
 use stm32f3xx_hal::pac::DWT;
 
 use super::duration::Duration;
+use super::TICKS_PER_SECOND;
 
 #[derive(PartialEq, PartialOrd, Clone, Copy, defmt::Format)]
 pub struct Instant {
@@ -17,6 +18,16 @@ impl Instant {
         Instant {
             now: DWT::cycle_count(),
         }
+    }
+
+    pub fn from_millis(millis: u32) -> Self {
+        Self {
+            now: millis * (TICKS_PER_SECOND / 1000)
+        }
+    }
+
+    pub fn as_millis(&self) -> u32 {
+        self.now / (TICKS_PER_SECOND / 1000)
     }
 }
 
