@@ -4,6 +4,8 @@
 pub mod channel;
 pub use channel::mpsc;
 
+pub mod net;
+
 pub mod runtime;
 pub use runtime::Runtime;
 
@@ -21,5 +23,5 @@ pub use futures_util::join;
 pub use futures_util::pin_mut as pin;
 
 pub mod hal {
-    pub use stm32f3xx_hal::{pac, prelude, rcc, timer};
+    pub use stm32f3xx_hal::{spi, gpio, pac, prelude, rcc, timer};
 }
