@@ -16,27 +16,18 @@ async fn delay() {
     sleep(Duration::from_secs(t)).await;
 }
 
-#[cortex_m_rt::entry]
+#[chrono::main]
 fn main() -> ! {
-    static mut rt: Runtime = Runtime::new();
+    let now = Instant::now();
+    let res = chrono::spawn(delay());
+    let handle = match res {
+        Ok(handle) => handle,
+        Err(_) => panic!("Could not spawn task!"),
+    };
 
-    rt.block_on(async {
-        let now = Instant::now();
-        let res = chrono::spawn(delay());
-        let handle = match res {
-            Ok(handle) => handle,
-            Err(_) => panic!("Could not spawn task!"),
-        };
+    handle.await;
 
-        handle.await;
-
-        let later = Instant::now();
-        let elapsed = later - now;
-        defmt::info!("Woke from sleep! {} seconds elapsed", elapsed.as_secs());
-    });
-
-    defmt::info!("Success!");
-    loop {
-        cortex_m::asm::bkpt();
-    }
+    let later = Instant::now();
+    let elapsed = later - now;
+    defmt::info!("Woke from sleep! {} seconds elapsed", elapsed.as_secs());
 }

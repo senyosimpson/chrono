@@ -14,6 +14,15 @@ cortex-m-rt = "0.7.1"
 defmt-rtt = "0.3.2"
 stm32f3 = { version = "0.14.0", features = ["stm32f303", "rt"] }
 defmt = "0.3.1"
+enc28j60 = { git = "https://github.com/senyosimpson/enc28j60", branch = "master" }
+smoltcp = { version = "0.8.1", default-features = false, features = [
+    "defmt",
+    "medium-ethernet",
+    "medium-ip",
+    "proto-ipv4",
+    "proto-ipv6",
+    "socket-tcp",
+] }
 
 # [[example]]
 # name = "join"
@@ -31,9 +40,9 @@ path = "channel.rs"
 name = "sleep"
 path = "sleep.rs"
 
-# [[example]]
-# name = "panic"
-# path = "panic.rs"
+[[example]]
+name = "net2"
+path = "net2.rs"
 
 # [[example]]
 # name = "drop_joinhandle"
