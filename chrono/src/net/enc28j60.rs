@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use core::ops::{Deref, DerefMut};
 
 use smoltcp::phy::{self, Device, DeviceCapabilities, Medium};
 
@@ -21,7 +22,7 @@ type Reset = Pin<Gpioa, U<3>, Output<PushPull>>;
 
 pub struct Enc28j60(enc28j60::Enc28j60<Spi, Ncs, Int, Reset>);
 
-const MTU: usize = 1516;
+const MTU: usize = 1514;
 
 pub struct RxToken {
     buffer: [u8; MTU],
@@ -41,6 +42,20 @@ impl Enc28j60 {
     }
 }
 
+impl Deref for Enc28j60 {
+    type Target = enc28j60::Enc28j60<Spi, Ncs, Int, Reset>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Enc28j60 {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl<'a> Device<'a> for Enc28j60 {
     type RxToken = RxToken;
 
@@ -56,23 +71,17 @@ impl<'a> Device<'a> for Enc28j60 {
     }
 
     fn receive(&'a mut self) -> Option<(Self::RxToken, Self::TxToken)> {
-        match self.0.pending_packets() {
-            Err(_) => panic!("failed to check if pending packets"),
-            Ok(n) if n == 0 => None,
-            Ok(_) => {
-                let mut buffer = [0; MTU];
-                match self.0.receive(&mut buffer) {
-                    Ok(size) => {
-                        let rx = RxToken { buffer, size };
-                        let tx = TxToken {
-                            device: self,
-                            phantom: PhantomData,
-                        };
-                        Some((rx, tx))
-                    },
-                    Err(_) => panic!("failed to check if pending packets"),
-                }
+        let mut buffer = [0; MTU];
+        match self.0.receive(&mut buffer) {
+            Ok(size) => {
+                let rx = RxToken { buffer, size };
+                let tx = TxToken {
+                    device: self,
+                    phantom: PhantomData,
+                };
+                Some((rx, tx))
             }
+            Err(_) => panic!("failed to check if pending packets"),
         }
     }
 
@@ -93,6 +102,7 @@ impl phy::RxToken for RxToken {
     where
         F: FnOnce(&mut [u8]) -> smoltcp::Result<R>,
     {
+        defmt::debug!("Consuming {} bytes", self.size);
         f(&mut self.buffer[..self.size as usize])
     }
 }
@@ -104,10 +114,15 @@ impl<'a> phy::TxToken for TxToken<'a, Enc28j60> {
     where
         F: FnOnce(&mut [u8]) -> smoltcp::Result<R>,
     {
+        defmt::debug!("Transmitting {} bytes", len);
         let mut buffer = [0; MTU];
-        let packet = &mut buffer[0..len];
+        let packet = &mut buffer[..len];
         let result = f(packet);
-        self.device.0.transmit(packet).expect("Failed to transmit");
+        self.device
+            .0
+            .transmit(packet)
+            .expect("Could not transmit packets");
+
         result
     }
 }

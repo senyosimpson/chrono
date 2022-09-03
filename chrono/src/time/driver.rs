@@ -42,7 +42,7 @@ impl Driver {
     pub fn start(&mut self, deadline: Duration) {
         assert!(
             self.initialised,
-            "initialise timer before usage via to .init()"
+            "initialise timer before usage via call to .init()"
         );
 
         let mut inner = self.inner.as_ref().unwrap().borrow_mut();
