@@ -71,17 +71,23 @@ impl<'a> Device<'a> for Enc28j60 {
     }
 
     fn receive(&'a mut self) -> Option<(Self::RxToken, Self::TxToken)> {
-        let mut buffer = [0; MTU];
-        match self.0.receive(&mut buffer) {
-            Ok(size) => {
-                let rx = RxToken { buffer, size };
-                let tx = TxToken {
-                    device: self,
-                    phantom: PhantomData,
-                };
-                Some((rx, tx))
-            }
+        match self.0.pending_packets() {
             Err(_) => panic!("failed to check if pending packets"),
+            Ok(n) if n == 0 => None,
+            Ok(_) => {
+                let mut buffer = [0; MTU];
+                match self.0.receive(&mut buffer) {
+                    Ok(size) => {
+                        let rx = RxToken { buffer, size };
+                        let tx = TxToken {
+                            device: self,
+                            phantom: PhantomData,
+                        };
+                        Some((rx, tx))
+                    },
+                    Err(_) => panic!("failed to check if pending packets"),
+                }
+            }
         }
     }
 
