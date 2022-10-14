@@ -1,0 +1,9 @@
+@default:
+  just --list
+
+setup:
+  sudo iptables -A INPUT -i enx000ec6c32e7f -j ACCEPT
+  sudo iptables -A OUTPUT -o enx000ec6c32e7f -j ACCEPT
+
+run:
+  DEFMT_LOG=trace cargo run --release
