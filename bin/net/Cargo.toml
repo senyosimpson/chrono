@@ -5,8 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[workspace]
+
 [dependencies]
-chrono = { path = "../chrono/chrono"}
+chrono = { path = "../../chrono"}
 heapless = {version = "0.7.10", features = ["default", "defmt-impl"] }
 
 panic-probe = { version = "0.3.0", features = ["print-defmt"] }
