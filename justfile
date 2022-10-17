@@ -5,6 +5,18 @@
 check:
   cargo clippy --all-targets -- -A clippy::module_inception -A clippy::new_ret_no_self -A clippy::zero_ptr -A clippy::new_without_default
 
+# Setup network interface
+setup-interface interface:
+  sudo iptables -A INPUT -i {{interface}} -j ACCEPT
+  sudo iptables -A OUTPUT -o {{interface}} -j ACCEPT
+  
+  sudo ip addr add 192.168.69.100/24 dev {{interface}}
+  
+
+# Socat listener
+socat-listen:
+  socat TCP-LISTEN:7777 STDOUT
+
 # Run cargo examples
 example ex:
   DEFMT_LOG=debug cargo run --example {{ex}}
