@@ -1,11 +1,13 @@
 // Multiple sockets can listen on same port (this is how we create a backlog)
 
+use core::cell::UnsafeCell;
 use core::future::Future;
 use core::task::{Context, Poll};
 
 use embedded_io::asynch::{Read as AsyncRead, Write as AsyncWrite};
 use futures_util::future::poll_fn;
 use smoltcp::iface::{Interface, SocketHandle};
+use smoltcp::socket::TcpSocket;
 
 use super::devices::Enc28j60;
 
@@ -22,7 +24,7 @@ impl embedded_io::Error for Error {
 
 pub struct TcpStream<'a> {
     /// The network interface for the ethernet driver
-    interface: &'a Interface<'a, Enc28j60>,
+    interface: &'a UnsafeCell<Interface<'a, Enc28j60>>,
     /// Handle to a TCP socket
     handle: SocketHandle,
 }
@@ -30,12 +32,48 @@ pub struct TcpStream<'a> {
 // ===== impl TcpStream =====
 
 impl<'a> TcpStream<'a> {
-    fn poll_read(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
-        Poll::Pending
+    fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize, Error>> {
+        unsafe {
+            // TODO: Sanity check grabbing this mutably
+            let interface = &mut *self.interface.get();
+            let socket = interface.get_socket::<TcpSocket>(self.handle);
+
+            match socket.recv_slice(buf) {
+                // No data
+                Ok(0) => {
+                    socket.register_recv_waker(cx.waker());
+                    Poll::Pending
+                }
+                // Data available
+                Ok(n) => Poll::Ready(Ok(n)),
+                // EOF
+                Err(smoltcp::Error::Finished) => Poll::Ready(Ok(0)),
+                // Some error
+                Err(_) => Poll::Ready(Err(Error::Unknown)),
+            }
+        }
     }
 
     fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
-        Poll::Pending
+        unsafe {
+            // TODO: Sanity check grabbing this mutably
+            let interface = &mut *self.interface.get();
+            let socket = interface.get_socket::<TcpSocket>(self.handle);
+
+            match socket.send_slice(buf) {
+                // No data
+                Ok(0) => {
+                    socket.register_send_waker(cx.waker());
+                    Poll::Pending
+                }
+                // Data written
+                Ok(n) => Poll::Ready(Ok(n)),
+                // Some error
+                Err(_) => Poll::Ready(Err(Error::Unknown)),
+
+            }
+
+        }
     }
 }
 
