@@ -5,7 +5,7 @@ use stm32f3xx_hal::pac::DWT;
 use super::duration::Duration;
 use super::TICKS_PER_SECOND;
 
-#[derive(PartialEq, PartialOrd, Clone, Copy, defmt::Format)]
+#[derive(PartialEq, Eq, PartialOrd, Clone, Copy, defmt::Format)]
 pub struct Instant {
     now: u32,
 }

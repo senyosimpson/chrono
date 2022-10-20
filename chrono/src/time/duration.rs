@@ -2,7 +2,7 @@ use core::cmp::{PartialEq, PartialOrd};
 
 use super::TICKS_PER_SECOND;
 
-#[derive(PartialEq, PartialOrd, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub struct Duration {
     ticks: u32,
 }
