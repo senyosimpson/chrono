@@ -119,6 +119,7 @@ impl Handle {
 
 // ===== impl Spawner =====
 
+#[derive(Debug)]
 pub enum SpawnError {
     QueueFull,
 }

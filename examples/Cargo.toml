@@ -24,9 +24,9 @@ smoltcp = { version = "0.8.1", default-features = false, features = [
     "socket-tcp",
 ] }
 
-# [[example]]
-# name = "join"
-# path = "join.rs"
+[[example]]
+name = "join"
+path = "join.rs"
 
 [[example]]
 name = "channel"
@@ -39,11 +39,3 @@ path = "channel.rs"
 [[example]]
 name = "sleep"
 path = "sleep.rs"
-
-[[example]]
-name = "net2"
-path = "net2.rs"
-
-# [[example]]
-# name = "drop_joinhandle"
-# path = "drop_joinhandle.rs"
