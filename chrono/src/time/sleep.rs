@@ -29,7 +29,7 @@ impl Future for Sleep {
             Poll::Ready(())
         } else {
             let header = waker::header(cx.waker());
-            unsafe { ((*header).vtable.schedule_timer)(waker::ptr(cx.waker()), self.deadline) }
+            unsafe { (header.vtable.schedule_timer)(waker::ptr(cx.waker()), self.deadline) }
             Poll::Pending
         }
     }

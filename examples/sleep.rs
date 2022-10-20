@@ -7,7 +7,6 @@ use panic_probe as _;
 use stm32f3 as _;
 
 use chrono::time::{sleep, Duration, Instant};
-use chrono::Runtime;
 
 #[chrono::alloc]
 async fn delay() {
