@@ -4,4 +4,6 @@ pub mod devices {
 }
 
 mod time;
+
 mod tcp;
+pub use tcp::TcpStream;

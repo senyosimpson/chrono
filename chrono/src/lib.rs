@@ -4,6 +4,10 @@
 pub mod channel;
 pub use channel::mpsc;
 
+pub mod io {
+    pub use embedded_io::asynch::{Read as AsyncRead, Write as AsyncWrite};
+}
+
 pub mod net;
 
 pub mod runtime;

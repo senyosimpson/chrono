@@ -32,6 +32,13 @@ pub struct TcpStream<'a> {
 // ===== impl TcpStream =====
 
 impl<'a> TcpStream<'a> {
+    pub fn new(
+        interface: &'a UnsafeCell<Interface<'a, Enc28j60>>,
+        handle: SocketHandle,
+    ) -> TcpStream<'a> {
+        TcpStream { interface, handle }
+    }
+
     fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize, Error>> {
         unsafe {
             // TODO: Sanity check grabbing this mutably
@@ -70,9 +77,7 @@ impl<'a> TcpStream<'a> {
                 Ok(n) => Poll::Ready(Ok(n)),
                 // Some error
                 Err(_) => Poll::Ready(Err(Error::Unknown)),
-
             }
-
         }
     }
 }
