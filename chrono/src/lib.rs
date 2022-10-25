@@ -27,5 +27,5 @@ pub use futures_util::join;
 pub use futures_util::pin_mut as pin;
 
 pub mod hal {
-    pub use stm32f3xx_hal::{spi, gpio, pac, prelude, rcc, timer, delay};
+    pub use stm32f3xx_hal::{delay, gpio, pac, prelude, rcc, spi, timer};
 }

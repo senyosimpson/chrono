@@ -1,15 +1,14 @@
 // Multiple sockets can listen on same port (this is how we create a backlog)
 
 use core::cell::UnsafeCell;
-use core::future::Future;
+use core::future::{Future, poll_fn};
 use core::task::{Context, Poll};
 
-use embedded_io::asynch::{Read as AsyncRead, Write as AsyncWrite};
-use futures_util::future::poll_fn;
 use smoltcp::iface::{Interface, SocketHandle};
 use smoltcp::socket::TcpSocket;
 
 use super::devices::Enc28j60;
+use crate::io::{AsyncRead, AsyncWrite};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Error {

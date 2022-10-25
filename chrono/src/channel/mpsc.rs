@@ -1,7 +1,7 @@
 //! A bounded multi-producer, single-consumer queue for sending values between
 //! asynchronous tasks.
 
-use futures_util::future::poll_fn;
+use core::future::poll_fn;
 
 use super::channel::Channel;
 use crate::channel::error::{SendError, TryRecvError};
