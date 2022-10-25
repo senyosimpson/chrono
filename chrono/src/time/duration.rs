@@ -1,5 +1,7 @@
 use core::cmp::{PartialEq, PartialOrd};
 
+use smoltcp::time::Duration as SmoltcpDuration;
+
 use super::TICKS_PER_SECOND;
 
 #[derive(PartialEq, Eq, PartialOrd, Clone, Copy)]
@@ -26,6 +28,12 @@ impl Duration {
         }
     }
 
+    pub fn from_millis(millis: u32) -> Duration {
+        Duration {
+            ticks: millis * (TICKS_PER_SECOND / 1000)
+        }
+    }
+
     pub fn as_micros(&self) -> u32 {
         self.ticks
     }
@@ -34,5 +42,12 @@ impl Duration {
 impl defmt::Format for Duration {
     fn format(&self, f: defmt::Formatter) {
         defmt::write!(f, "{} seconds", self.as_secs())
+    }
+}
+
+impl From<SmoltcpDuration> for Duration {
+    fn from(duration: SmoltcpDuration) -> Self {
+        let millis = duration.total_millis().try_into().unwrap();
+        Duration::from_millis(millis)
     }
 }

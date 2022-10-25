@@ -39,6 +39,8 @@ impl Driver {
         self.initialised = true;
     }
 
+    /// Start a countdown timer. The timer will fire an interrupt after the duration
+    /// of deadline has elapsed
     pub fn start(&mut self, deadline: Duration) {
         assert!(
             self.initialised,

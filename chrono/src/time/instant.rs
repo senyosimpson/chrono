@@ -1,5 +1,6 @@
 use core::ops::{Add, Sub};
 
+use smoltcp::time::Instant as SmoltcpInstant;
 use stm32f3xx_hal::pac::DWT;
 
 use super::duration::Duration;
@@ -46,5 +47,19 @@ impl Add<Duration> for Instant {
     fn add(self, rhs: Duration) -> Self::Output {
         let then = self.now + rhs.ticks();
         Instant { now: then }
+    }
+}
+
+
+impl From<Instant> for SmoltcpInstant {
+    fn from(instant: Instant) -> Self {
+        SmoltcpInstant::from_millis(instant.as_millis() as i64) 
+    }
+}
+
+impl From<SmoltcpInstant> for Instant {
+    fn from(instant: SmoltcpInstant) -> Self {
+        let millis = instant.total_millis().try_into().unwrap();
+        Instant::from_millis(millis) 
     }
 }
