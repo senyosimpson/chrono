@@ -8,6 +8,9 @@ pub mod io {
     pub use embedded_io::asynch::{Read as AsyncRead, Write as AsyncWrite};
 }
 
+mod init;
+pub use init::init;
+
 pub mod net;
 
 pub mod runtime;
