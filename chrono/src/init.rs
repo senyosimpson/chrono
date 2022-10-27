@@ -5,9 +5,13 @@ use crate::hal::spi::Spi;
 use crate::net::devices::Enc28j60;
 use crate::time;
 
-struct Devices {
-    network_device: Option<Enc28j60>,
+#[cfg(feature = "networking")]
+pub struct Devices {
+    network: Enc28j60,
 }
+
+#[cfg(not(feature = "networking"))]
+pub struct Devices {}
 
 pub fn init() -> Devices {
     let peripherals = unsafe { pac::Peripherals::steal() };
@@ -34,9 +38,11 @@ pub fn init() -> Devices {
     // init time driver
     time::driver().init(peripherals.TIM2, clocks, &mut rcc.apb1);
 
+    #[cfg(not(feature = "networking"))]
+    let devices = Devices {};
+
     #[cfg(feature = "networking")]
-    {
-        /* Constants */
+    let devices = {
         const KB: u16 = 1024; // bytes
         const RX_BUF_SIZE: u16 = 7 * KB;
         const MAC_ADDR: [u8; 6] = [0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
@@ -97,14 +103,10 @@ pub fn init() -> Devices {
 
         defmt::debug!("Initialised ethernet device");
 
-        let network_device = Enc28j60::new(enc28j60);
+        let device = Enc28j60::new(enc28j60);
 
-        return Devices {
-            network_device: Some(network_device),
-        };
-    }
+        Devices { network: device }
+    };
 
-    Devices {
-        network_device: None,
-    }
+    devices
 }
