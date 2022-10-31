@@ -4,6 +4,7 @@ pub mod devices {
 }
 
 mod stack;
+pub use stack::Stack;
 
 mod tcp;
 pub use tcp::TcpStream;

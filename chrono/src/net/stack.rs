@@ -1,37 +1,51 @@
 use core::future::{poll_fn, Future};
+use core::mem::MaybeUninit;
 use core::task::{Poll, Waker};
 
-use smoltcp::iface::{Interface, NeighborCache, Routes, SocketStorage, InterfaceBuilder};
-use smoltcp::wire::{EthernetAddress, IpAddress, Ipv4Address, IpCidr};
+use smoltcp::iface::{Interface, InterfaceBuilder, Neighbor, NeighborCache, Routes, SocketStorage, Route};
+use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 
 use super::devices::Enc28j60;
 use crate::time::{sleep, Instant};
 
-
 const MAC_ADDR: [u8; 6] = [0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
 
-pub struct Stack<'a> {
-    interface: Interface<'a, Enc28j60>,
+static mut STORAGE: MaybeUninit<Storage> = MaybeUninit::uninit();
+
+struct Storage {
+    neighbor_cache: [Option<(IpAddress, Neighbor)>; 16],
+    routes: [Option<(IpCidr, Route)>; 1],
+    sockets: [SocketStorage<'static>; 16],
+    ip_addrs: [IpCidr; 1],
+}
+
+pub struct Stack {
+    interface: Interface<'static, Enc28j60>,
     waker: Option<Waker>,
 }
 
-impl<'a> Stack<'a> {
-    pub fn new(device: Enc28j60) -> Stack<'a> {
-        let mut cache = [None; 16];
-        let neighbor_cache = NeighborCache::new(&mut cache[..]);
+impl Stack {
+    pub fn new(device: Enc28j60) -> Stack {
+        let storage = {
+            let s = Storage {
+                neighbor_cache: [None; 16],
+                routes: [None; 1],
+                sockets: [SocketStorage::EMPTY; 16],
+                ip_addrs: [IpCidr::new(IpAddress::v4(192, 168, 69, 1), 24)],
+            };
+            unsafe { STORAGE.write(s) }
+        };
+
+        let neighbor_cache = NeighborCache::new(&mut storage.neighbor_cache[..]);
 
         let ethernet_addr = EthernetAddress(MAC_ADDR);
-        let ip_addr = IpAddress::v4(192, 168, 69, 1);
-        let mut ip_addrs = [IpCidr::new(ip_addr, 24)];
 
         let default_v4_gw = Ipv4Address::new(192, 168, 69, 100);
-        let mut routes_storage = [None; 1];
-        let mut routes = Routes::new(&mut routes_storage[..]);
+        let mut routes = Routes::new(&mut storage.routes[..]);
         routes.add_default_ipv4_route(default_v4_gw).unwrap();
 
-        let mut storage = [SocketStorage::EMPTY; 16];
-        let mut interface = InterfaceBuilder::new(device, &mut storage[..])
-            .ip_addrs(&mut ip_addrs[..])
+        let interface = InterfaceBuilder::new(device, &mut storage.sockets[..])
+            .ip_addrs(&mut storage.ip_addrs[..])
             .hardware_addr(ethernet_addr.into())
             .neighbor_cache(neighbor_cache)
             .finalize();
