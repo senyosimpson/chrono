@@ -2,18 +2,11 @@ use crate::hal::delay::Delay;
 use crate::hal::pac;
 use crate::hal::prelude::*;
 use crate::hal::spi::Spi;
+use crate::net::stack;
 use crate::net::devices::Enc28j60;
 use crate::time;
 
-#[cfg(feature = "networking")]
-pub struct Devices {
-    network: Enc28j60,
-}
-
-#[cfg(not(feature = "networking"))]
-pub struct Devices {}
-
-pub fn init() -> Devices {
+pub fn init() {
     let peripherals = unsafe { pac::Peripherals::steal() };
 
     // This is a workaround, so that the debugger will not disconnect immediately on asm::wfe();
@@ -38,11 +31,8 @@ pub fn init() -> Devices {
     // init time driver
     time::driver().init(peripherals.TIM2, clocks, &mut rcc.apb1);
 
-    #[cfg(not(feature = "networking"))]
-    let devices = Devices {};
-
     #[cfg(feature = "networking")]
-    let devices = {
+    {
         const KB: u16 = 1024; // bytes
         const RX_BUF_SIZE: u16 = 7 * KB;
         const MAC_ADDR: [u8; 6] = [0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
@@ -104,9 +94,6 @@ pub fn init() -> Devices {
         defmt::debug!("Initialised ethernet device");
 
         let device = Enc28j60::new(enc28j60);
-
-        Devices { network: device }
-    };
-
-    devices
+        stack().init(device);
+    }
 }
