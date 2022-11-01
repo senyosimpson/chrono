@@ -1,8 +1,11 @@
+use core::cell::RefCell;
 use core::future::{poll_fn, Future};
 use core::mem::MaybeUninit;
 use core::task::{Poll, Waker};
 
-use smoltcp::iface::{Interface, InterfaceBuilder, Neighbor, NeighborCache, Routes, SocketStorage, Route};
+use smoltcp::iface::{
+    Interface, InterfaceBuilder, Neighbor, NeighborCache, Route, Routes, SocketStorage,
+};
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 
 use super::devices::Enc28j60;
@@ -12,6 +15,8 @@ const MAC_ADDR: [u8; 6] = [0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
 
 static mut STORAGE: MaybeUninit<Storage> = MaybeUninit::uninit();
 
+pub static mut STACK: Stack = Stack::new();
+
 struct Storage {
     neighbor_cache: [Option<(IpAddress, Neighbor)>; 16],
     routes: [Option<(IpCidr, Route)>; 1],
@@ -20,12 +25,30 @@ struct Storage {
 }
 
 pub struct Stack {
-    interface: Interface<'static, Enc28j60>,
+    pub(crate) inner: Option<RefCell<Inner>>,
+    initialised: bool,
+}
+
+pub struct Inner {
+    pub interface: Interface<'static, Enc28j60>,
     waker: Option<Waker>,
 }
 
+pub fn stack() -> &'static mut Stack {
+    unsafe { &mut STACK }
+}
+
+unsafe impl Sync for Stack {}
+
 impl Stack {
-    pub fn new(device: Enc28j60) -> Stack {
+    pub const fn new() -> Stack {
+        Stack {
+            inner: None,
+            initialised: false,
+        }
+    }
+
+    pub fn init(&mut self, device: Enc28j60) {
         let storage = {
             let s = Storage {
                 neighbor_cache: [None; 16],
@@ -50,29 +73,39 @@ impl Stack {
             .neighbor_cache(neighbor_cache)
             .finalize();
 
-        Stack {
+        let inner = Inner {
             interface,
             waker: None,
-        }
+        };
+
+        self.inner = Some(RefCell::new(inner));
+        self.initialised = true;
     }
 
-    async fn start(&mut self) {
+    pub async fn start(&mut self) {
+        assert!(
+            self.initialised,
+            "initialise net stack before usage via call to .init()"
+        );
+
         poll_fn(|cx| {
+            let mut inner = self.inner.as_ref().unwrap().borrow_mut();
+
             // Register waker. If there is a waker, drop it
-            if let Some(waker) = self.waker.take() {
+            if let Some(waker) = inner.waker.take() {
                 drop(waker)
             };
-            self.waker = Some(cx.waker().clone());
+            inner.waker = Some(cx.waker().clone());
 
             let timestamp = Instant::now();
-            match self.interface.poll(timestamp.into()) {
+            match inner.interface.poll(timestamp.into()) {
                 Ok(_) => {}
                 Err(e) => defmt::debug!("Interface poll error: {}", e),
             };
 
             // If we are ready to poll the interface again, poll for more packets. Otherwise sleep
             // until the next deadline
-            if let Some(deadline) = self.interface.poll_delay(timestamp.into()) {
+            if let Some(deadline) = inner.interface.poll_delay(timestamp.into()) {
                 let delay = sleep(deadline.into());
                 crate::pin!(delay);
                 if delay.poll(cx).is_ready() {
