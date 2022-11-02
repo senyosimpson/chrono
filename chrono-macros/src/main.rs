@@ -38,7 +38,8 @@ pub(super) fn main(f: syn::ItemFn) -> TokenStream {
 
         #[cortex_m_rt::entry]
         unsafe fn main() -> ! {
-            #hal_setup
+            // #hal_setup
+            ::chrono::init();
 
             static mut RT: ::chrono::Runtime = ::chrono::Runtime::new();
             RT.block_on(fut());

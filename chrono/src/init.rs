@@ -7,6 +7,8 @@ use crate::net::devices::Enc28j60;
 use crate::time;
 
 pub fn init() {
+    defmt::debug!("Initialising system");
+
     let peripherals = unsafe { pac::Peripherals::steal() };
 
     // This is a workaround, so that the debugger will not disconnect immediately on asm::wfe();
@@ -29,6 +31,7 @@ pub fn init() {
     drop(core_peripherals.DWT);
 
     // init time driver
+    defmt::debug!("Initialised time driver");
     time::driver().init(peripherals.TIM2, clocks, &mut rcc.apb1);
 
     #[cfg(feature = "networking")]
