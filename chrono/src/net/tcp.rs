@@ -1,5 +1,6 @@
 // Multiple sockets can listen on same port (this is how we create a backlog)
 
+use core::fmt;
 use core::future::{poll_fn, Future};
 use core::task::{Context, Poll};
 
@@ -20,6 +21,16 @@ pub enum Error {
 impl embedded_io::Error for Error {
     fn kind(&self) -> embedded_io::ErrorKind {
         embedded_io::ErrorKind::Other
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::Unknown => write!(f, "unknown error"),
+            Error::AlreadyOpen => write!(f, "socket already open"),
+            Error::InvalidPort => write!(f, "invalid port"),
+        }
     }
 }
 
@@ -65,6 +76,7 @@ impl TcpListener {
     }
 
     pub async fn accept(&self) -> Result<(TcpStream, IpEndpoint), Error> {
+        // TODO: Check if sane holding reference across await
         let mut inner = net::stack().inner.as_ref().unwrap().borrow_mut();
         let socket = inner.interface.get_socket::<TcpSocket>(self.handle);
 
