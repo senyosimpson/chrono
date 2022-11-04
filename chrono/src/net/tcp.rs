@@ -59,6 +59,7 @@ impl TcpListener {
 
     pub fn bind<T: Into<IpEndpoint>>(&mut self, addr: T) -> Result<(), Error> {
         // TODO: Make N listeners for a given endpoint
+        defmt::debug!("Binding TCP listener");
 
         let mut inner = net::stack().inner.as_ref().unwrap().borrow_mut();
         let socket = inner.interface.get_socket::<TcpSocket>(self.handle);
@@ -76,24 +77,32 @@ impl TcpListener {
     }
 
     pub async fn accept(&self) -> Result<(TcpStream, IpEndpoint), Error> {
-        // TODO: Check if sane holding reference across await
+        poll_fn(|cx| self.poll_accept(cx)).await
+    }
+
+    pub fn poll_accept(
+        &self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(TcpStream, IpEndpoint), Error>> {
+        defmt::debug!("Accepting connection!");
         let mut inner = net::stack().inner.as_ref().unwrap().borrow_mut();
         let socket = inner.interface.get_socket::<TcpSocket>(self.handle);
 
-        poll_fn(|cx| match socket.state() {
+        match socket.state() {
             TcpState::Listen | TcpState::SynReceived | TcpState::SynSent => {
                 socket.register_send_waker(cx.waker()); // What wakes this up? Smoltcp might have inbuilt functionality for this
                 Poll::Pending
             }
-            _ => Poll::Ready(()),
-        })
-        .await;
+            _ => {
+                defmt::debug!("Accepted connection!");
+                let tcp_stream = TcpStream {
+                    handle: self.handle,
+                };
+                let remote_endpoint = socket.remote_endpoint();
 
-        let tcp_stream = TcpStream {
-            handle: self.handle,
-        };
-
-        Ok((tcp_stream, socket.remote_endpoint()))
+                Poll::Ready(Ok((tcp_stream, remote_endpoint)))
+            }
+        }
     }
 }
 
