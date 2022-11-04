@@ -1,7 +1,7 @@
 use core::cell::RefCell;
 use core::future::{poll_fn, Future};
 use core::mem::MaybeUninit;
-use core::task::{Poll, Waker};
+use core::task::{Context, Poll};
 
 use smoltcp::iface::{
     Interface, InterfaceBuilder, Neighbor, NeighborCache, Route, Routes, SocketStorage,
@@ -31,7 +31,6 @@ pub struct Stack {
 
 pub struct Inner {
     pub interface: Interface<'static, Enc28j60>,
-    waker: Option<Waker>,
 }
 
 pub fn stack() -> &'static mut Stack {
@@ -75,7 +74,6 @@ impl Stack {
 
         let inner = Inner {
             interface,
-            waker: None,
         };
 
         self.inner = Some(RefCell::new(inner));
@@ -88,33 +86,37 @@ impl Stack {
             "initialise net stack before usage via call to .init()"
         );
 
-        poll_fn(|cx| {
-            let mut inner = self.inner.as_ref().unwrap().borrow_mut();
+        defmt::debug!("Starting net stack");
+        poll_fn(|cx| self.poll_start(cx)).await
+    }
 
-            // Register waker. If there is a waker, drop it
-            if let Some(waker) = inner.waker.take() {
-                drop(waker)
-            };
-            inner.waker = Some(cx.waker().clone());
+    pub fn poll_start(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        let mut inner = self.inner.as_ref().unwrap().borrow_mut();
 
-            let timestamp = Instant::now();
-            match inner.interface.poll(timestamp.into()) {
-                Ok(_) => {}
-                Err(e) => defmt::debug!("Interface poll error: {}", e),
-            };
+        let timestamp = Instant::now();
+        match inner.interface.poll(timestamp.into()) {
+            Ok(_) => {}
+            Err(e) => defmt::debug!("Interface poll error: {}", e),
+        };
 
-            // If we are ready to poll the interface again, poll for more packets. Otherwise sleep
-            // until the next deadline
-            if let Some(deadline) = inner.interface.poll_delay(timestamp.into()) {
+        // If a deadline is returned, we wait until its expired and wake to be polled
+        // again. If no deadline is returned, we wake and poll again immediately,
+        // effectively polling in a loop.
+        match inner.interface.poll_delay(timestamp.into()) {
+            Some(deadline) => {
+                defmt::debug!("Polling network interface in {}", deadline.secs());
                 let delay = sleep(deadline.into());
                 crate::pin!(delay);
                 if delay.poll(cx).is_ready() {
                     cx.waker().wake_by_ref()
                 }
             }
+            None => {
+                defmt::debug!("Polling network interface again immediately");
+                cx.waker().wake_by_ref()
+            }
+        }
 
-            Poll::Pending
-        })
-        .await
+        Poll::Pending
     }
 }
