@@ -35,7 +35,7 @@ pub(crate) struct EnterGuard;
 
 impl Drop for EnterGuard {
     fn drop(&mut self) {
-        defmt::debug!("Dropping enter guard");
+        defmt::trace!("Dropping enter guard");
         CONTEXT.with(|ctx| {
             ctx.get().take();
         })

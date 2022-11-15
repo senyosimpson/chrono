@@ -60,24 +60,18 @@ impl Runtime {
 
         crate::pin!(future);
 
-        let waker = unsafe { Waker::from_raw(NoopWaker::waker()) };
+        let waker = unsafe { Waker::from_raw(NoopWaker::new()) };
         let cx = &mut Context::from_waker(&waker);
 
         loop {
             // If the future is ready, return the output
-            defmt::debug!("Polling `block_on` future");
+            defmt::trace!("Polling `block_on` future");
             if let Poll::Ready(v) = future.as_mut().poll(cx) {
-                defmt::debug!("`block_on` future ready");
+                defmt::trace!("`block_on` future ready");
                 return v;
             }
-            defmt::debug!("`block_on` future pending");
-
-            // If the task queue is empty, wait for an event/interrupt
-            if self.tasks.is_empty() {
-                defmt::debug!("Queue empty. Waiting for event");
-                cortex_m::asm::wfe()
-            }
-
+            defmt::trace!("`block_on` future pending");
+    
             // Process all timers
             let now = Instant::now();
             self.timers.process(now);
@@ -86,14 +80,20 @@ impl Runtime {
             if let Some(deadline) = self.timers.deadline() {
                 let dur = deadline - Instant::now();
                 context::time_driver().start(dur);
-                defmt::debug!("Started timer. Deadline in {}", dur);
+                defmt::trace!("Started timer. Deadline in {}", dur);
+            }
+
+            // If the task queue is empty, wait for an event/interrupt
+            if self.tasks.is_empty() {
+                defmt::debug!("Queue empty. Waiting for event");
+                cortex_m::asm::wfe()
             }
 
             loop {
                 let task = self.tasks.pop_front();
                 match task {
                     Some(task) => {
-                        defmt::debug!("Task {}: Popped off executor queue and running", task.id);
+                        defmt::trace!("Task {}: Popped off executor queue and running", task.id);
                         task.run()
                     }
                     None => break,
@@ -161,10 +161,10 @@ impl Spawner {
 struct NoopWaker;
 
 impl NoopWaker {
-    fn waker() -> RawWaker {
+    fn new() -> RawWaker {
         fn no_op(_: *const ()) {}
         fn clone(_: *const ()) -> RawWaker {
-            NoopWaker::waker()
+            NoopWaker::new()
         }
 
         let vtable = &RawWakerVTable::new(clone, no_op, no_op, no_op);

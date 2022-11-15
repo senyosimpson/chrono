@@ -156,7 +156,7 @@ where
         let header = memory.mut_header();
 
         let task = memory.task();
-        defmt::debug!("Task {}: Waking raw task", task.id);
+        defmt::trace!("Task {}: Waking raw task", task.id);
 
         header.state.transition_to_scheduled();
         Self::schedule(ptr);
@@ -197,7 +197,7 @@ where
         let status = memory.mut_status();
         match Self::poll_inner(status, cx) {
             Poll::Pending => {
-                defmt::debug!("Task pending");
+                defmt::trace!("Task pending");
                 header.state.transition_to_idle();
             }
             Poll::Ready(_) => {

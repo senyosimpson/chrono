@@ -128,7 +128,7 @@ impl TimerQueue {
             // The timer is not finished. Check to see if it should become the new deadline
             if let Some(t) = curr.expiry() {
                 if t < deadline {
-                    defmt::debug!("Setting deadline");
+                    defmt::trace!("Setting deadline");
                     deadline = t
                 }
             }
@@ -184,7 +184,7 @@ impl LinkedList {
     
     /// Add an element to the back of list
     pub fn push_back(&mut self, task: NonNull<Task>) {
-        defmt::debug!("Inserting into task queue");
+        defmt::trace!("Inserting into task queue");
         unsafe {
             if let Some(mut tail) = self.tail.get() {
                 tail.as_mut().tasks.set_next(Some(task));
