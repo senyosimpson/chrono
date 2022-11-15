@@ -83,7 +83,7 @@ impl State {
         self.set_complete();
         self.unset_running();
         if let Some(task_id) = self.task_id {
-            defmt::debug!(
+            defmt::trace!(
                 "Task {}: Transitioned to complete. State: {}",
                 task_id,
                 self
@@ -95,7 +95,7 @@ impl State {
         self.set_running();
         self.unset_scheduled();
         if let Some(task_id) = self.task_id {
-            defmt::debug!("Task {}: Transitioned to running. State: {}", task_id, self);
+            defmt::trace!("Task {}: Transitioned to running. State: {}", task_id, self);
         }
     }
 
@@ -103,7 +103,7 @@ impl State {
         self.unset_running();
         self.unset_scheduled();
         if let Some(task_id) = self.task_id {
-            defmt::debug!("Task {}: Transitioned to idle. State: {}", task_id, self);
+            defmt::trace!("Task {}: Transitioned to idle. State: {}", task_id, self);
         }
     }
 
@@ -111,7 +111,7 @@ impl State {
         self.set_scheduled();
         self.unset_running();
         if let Some(task_id) = self.task_id {
-            defmt::debug!(
+            defmt::trace!(
                 "Task {}: Transitioned to scheduled. State: {}",
                 task_id,
                 self

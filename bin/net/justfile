@@ -1,9 +1,0 @@
-@default:
-  just --list
-
-setup-interface interface:
-  sudo iptables -A INPUT -i {{interface}} -j ACCEPT
-  sudo iptables -A OUTPUT -o {{interface}} -j ACCEPT
-
-run:
-  DEFMT_LOG=trace cargo run --release

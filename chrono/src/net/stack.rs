@@ -72,9 +72,7 @@ impl Stack {
             .neighbor_cache(neighbor_cache)
             .finalize();
 
-        let inner = Inner {
-            interface,
-        };
+        let inner = Inner { interface };
 
         self.inner = Some(RefCell::new(inner));
         self.initialised = true;
@@ -96,7 +94,7 @@ impl Stack {
         let timestamp = Instant::now();
         match inner.interface.poll(timestamp.into()) {
             Ok(_) => {}
-            Err(e) => defmt::debug!("Interface poll error: {}", e),
+            Err(e) => defmt::warn!("Interface poll error: {}", e),
         };
 
         // If a deadline is returned, we wait until its expired and wake to be polled
@@ -104,17 +102,13 @@ impl Stack {
         // effectively polling in a loop.
         match inner.interface.poll_delay(timestamp.into()) {
             Some(deadline) => {
-                defmt::debug!("Polling network interface in {}", deadline.secs());
                 let delay = sleep(deadline.into());
                 crate::pin!(delay);
                 if delay.poll(cx).is_ready() {
                     cx.waker().wake_by_ref()
                 }
             }
-            None => {
-                defmt::debug!("Polling network interface again immediately");
-                cx.waker().wake_by_ref()
-            }
+            None => cx.waker().wake_by_ref(),
         }
 
         Poll::Pending

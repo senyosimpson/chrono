@@ -24,7 +24,7 @@ impl<T> Future for JoinHandle<T> {
             let header = &mut *(raw as *mut Header);
 
             let id = header.task.id;
-            defmt::debug!(
+            defmt::trace!(
                 "Task {}: JoinHandle is complete: {}",
                 id,
                 header.state.is_complete()
@@ -35,7 +35,7 @@ impl<T> Future for JoinHandle<T> {
                 header.register_waker(cx.waker());
                 header.state.set_join_waker();
             } else {
-                defmt::debug!("Task {}: JoinHandle ready", id);
+                defmt::trace!("Task {}: JoinHandle ready", id);
                 (header.vtable.get_output)(self.raw.as_ptr(), &mut output as *mut _ as *mut ());
             }
         }
@@ -50,7 +50,7 @@ impl<T> Drop for JoinHandle<T> {
         let header = raw as *mut Header;
 
         unsafe {
-            defmt::debug!("Task {}: Dropping JoinHandle", ((*header).task.id));
+            defmt::trace!("Task {}: Dropping JoinHandle", ((*header).task.id));
             ((*header).vtable.drop_join_handle)(self.raw.as_ptr())
         }
     }

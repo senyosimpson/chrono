@@ -65,7 +65,8 @@ impl<'a> Device<'a> for Enc28j60 {
         let mut dc = DeviceCapabilities::default();
         dc.medium = Medium::Ethernet;
         dc.max_transmission_unit = MTU;
-        dc.max_burst_size = Some(0);
+        // Must be set to a value > 0 otherwise TCP window size is set to 0
+        dc.max_burst_size = Some(1);
 
         dc
     }
@@ -108,7 +109,7 @@ impl phy::RxToken for RxToken {
     where
         F: FnOnce(&mut [u8]) -> smoltcp::Result<R>,
     {
-        defmt::debug!("Consuming {} bytes", self.size);
+        defmt::trace!("Consuming {} bytes", self.size);
         f(&mut self.buffer[..self.size as usize])
     }
 }
@@ -120,7 +121,7 @@ impl<'a> phy::TxToken for TxToken<'a, Enc28j60> {
     where
         F: FnOnce(&mut [u8]) -> smoltcp::Result<R>,
     {
-        defmt::debug!("Transmitting {} bytes", len);
+        defmt::trace!("Transmitting {} bytes", len);
         let mut buffer = [0; MTU];
         let packet = &mut buffer[..len];
         let result = f(packet);
