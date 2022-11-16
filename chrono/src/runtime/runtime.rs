@@ -89,6 +89,8 @@ impl Runtime {
                 cortex_m::asm::wfe()
             }
 
+            // Prepare the task queue before walking through it
+            self.tasks.prepare();
             loop {
                 let task = self.tasks.pop_front();
                 match task {

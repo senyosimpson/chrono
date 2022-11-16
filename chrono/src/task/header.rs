@@ -9,7 +9,7 @@ pub struct Header {
     pub task: Task,
     pub state: State,
     pub expiry: Option<Instant>,
-    pub waker: Option<Waker>,        // Why is this wrapped in UnsafeCell?
+    pub waker: Option<Waker>,
     pub vtable: &'static TaskVTable, // Why &'static? Think cause they are fns
 }
 

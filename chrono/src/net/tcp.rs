@@ -74,10 +74,6 @@ impl TcpSocket {
             },
         }?;
 
-        // Configure socket
-        // Keep alive set to ping every 1.25 minutes
-        socket.set_keep_alive(Some(smoltcp::time::Duration::from_millis(1000)));
-
         Ok(())
     }
 
