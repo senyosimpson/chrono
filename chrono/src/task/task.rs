@@ -2,6 +2,7 @@ use core::cell::Cell;
 use core::fmt::Display;
 use core::ptr::NonNull;
 
+use crate::runtime::queue::Batch;
 use crate::time::instant::Instant;
 
 use super::header::Header;
@@ -10,6 +11,7 @@ use super::header::Header;
 pub struct Task {
     pub id: TaskId,
     pub raw: NonNull<()>,
+    pub(crate) batch: Batch,
     pub(crate) tasks: Pointers,
     pub(crate) timers: Pointers,
 }
@@ -31,6 +33,7 @@ impl Task {
         Task {
             id: TaskId::new(),
             raw: ptr,
+            batch: Batch(1),
             tasks: Pointers::default(),
             timers: Pointers::default(),
         }
@@ -62,18 +65,26 @@ impl Task {
         }
     }
 
-    /// If a timer has been set, the instant in time it will expire 
+    /// If a timer has been set, the instant in time it will expire
     pub(crate) fn expiry(&self) -> Option<Instant> {
         let ptr = self.raw.as_ptr();
         let header = unsafe { &*(ptr as *const Header) };
         header.expiry
     }
-    
+
     /// Clears expiry
     pub(crate) fn clear_expiry(&self) {
         let ptr = self.raw.as_ptr();
         let header = unsafe { &mut *(ptr as *mut Header) };
         header.expiry = None;
+    }
+
+    pub fn set_batch(&mut self, batch: Batch) {
+        self.batch = batch
+    }
+
+    pub fn batch(&self) -> Batch {
+        self.batch
     }
 }
 

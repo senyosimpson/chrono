@@ -17,7 +17,11 @@ pub(crate) struct TimerQueue {
 pub(crate) struct LinkedList {
     pub head: Cell<Option<NonNull<Task>>>,
     pub tail: Cell<Option<NonNull<Task>>>,
+    pub batch: Cell<(Batch, Batch)>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Batch(pub u8);
 
 // ===== impl TaskQueue =====
 
@@ -174,20 +178,28 @@ impl LinkedList {
         LinkedList {
             head: Cell::new(None),
             tail: Cell::new(None),
+            batch: Cell::new((Batch(0), Batch(1))),
         }
+    }
+
+    pub fn prepare(&self) {
+        let batch = self.batch.get();
+        self.batch
+            .replace((Batch(batch.0.0.wrapping_add(1)), Batch(batch.1.0.wrapping_add(1))));
     }
 
     /// Is the list empty?
     pub fn is_empty(&self) -> bool {
         self.head.get().is_none()
     }
-    
+
     /// Add an element to the back of list
     pub fn push_back(&mut self, task: NonNull<Task>) {
         defmt::trace!("Inserting into task queue");
         unsafe {
             if let Some(mut tail) = self.tail.get() {
                 tail.as_mut().tasks.set_next(Some(task));
+                tail.as_mut().set_batch(Batch(self.batch.get().1.0));
                 self.tail.replace(Some(task));
                 return;
             }
@@ -203,6 +215,11 @@ impl LinkedList {
             None => None,
             Some(mut head) => {
                 let curr = unsafe { head.as_mut() };
+                // If the task isn't from the current batch, return
+                if curr.batch() != self.batch.get().0 {
+                    return None
+                }
+
                 if curr.tasks.next().is_none() {
                     // We are on the last element in the queue. Set
                     // head and tail to None and return the task

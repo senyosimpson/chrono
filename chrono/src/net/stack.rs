@@ -1,5 +1,5 @@
 use core::cell::RefCell;
-use core::future::{poll_fn, Future};
+use core::future::poll_fn;
 use core::mem::MaybeUninit;
 use core::task::{Context, Poll};
 
@@ -9,7 +9,7 @@ use smoltcp::iface::{
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 
 use super::devices::Enc28j60;
-use crate::time::{sleep, Instant};
+use crate::time::Instant;
 
 const MAC_ADDR: [u8; 6] = [0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
 
@@ -97,20 +97,7 @@ impl Stack {
             Err(e) => defmt::warn!("Interface poll error: {}", e),
         };
 
-        // If a deadline is returned, we wait until its expired and wake to be polled
-        // again. If no deadline is returned, we wake and poll again immediately,
-        // effectively polling in a loop.
-        match inner.interface.poll_delay(timestamp.into()) {
-            Some(deadline) => {
-                let delay = sleep(deadline.into());
-                crate::pin!(delay);
-                if delay.poll(cx).is_ready() {
-                    cx.waker().wake_by_ref()
-                }
-            }
-            None => cx.waker().wake_by_ref(),
-        }
-
+        cx.waker().wake_by_ref();
         Poll::Pending
     }
 }
