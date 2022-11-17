@@ -2,7 +2,7 @@ use core::cell::Cell;
 use core::fmt::Display;
 use core::ptr::NonNull;
 
-use crate::runtime::queue::Batch;
+use crate::runtime::queue::Generation;
 use crate::time::instant::Instant;
 
 use super::header::Header;
@@ -11,7 +11,7 @@ use super::header::Header;
 pub struct Task {
     pub id: TaskId,
     pub raw: NonNull<()>,
-    pub(crate) batch: Batch,
+    pub(crate) generation: Generation,
     pub(crate) tasks: Pointers,
     pub(crate) timers: Pointers,
 }
@@ -33,7 +33,7 @@ impl Task {
         Task {
             id: TaskId::new(),
             raw: ptr,
-            batch: Batch(1),
+            generation: Generation(1),
             tasks: Pointers::default(),
             timers: Pointers::default(),
         }
@@ -79,12 +79,12 @@ impl Task {
         header.expiry = None;
     }
 
-    pub fn set_batch(&mut self, batch: Batch) {
-        self.batch = batch
+    pub fn set_generation(&mut self, generation: Generation) {
+        self.generation = generation
     }
 
-    pub fn batch(&self) -> Batch {
-        self.batch
+    pub fn generation(&self) -> Generation {
+        self.generation
     }
 }
 
