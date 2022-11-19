@@ -32,10 +32,6 @@ path = "join.rs"
 name = "channel"
 path = "channel.rs"
 
-# [[example]]
-# name = "tcp_read"
-# path = "tcp_read.rs"
-
 [[example]]
 name = "sleep"
 path = "sleep.rs"
