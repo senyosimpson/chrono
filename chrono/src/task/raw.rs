@@ -10,9 +10,12 @@ use super::cell::UninitCell;
 use super::header::Header;
 use super::state::State;
 use super::task::Task;
-use crate::Runtime;
+use crate::runtime::SpawnError;
 use crate::time::Instant;
+use crate::Runtime;
 
+// The C representation means we have guarantees on
+// the memory layout of the task
 #[repr(C)]
 pub struct Memory<F: Future<Output = T>, T> {
     /// Header of the task. Contains data related to the state
@@ -25,15 +28,46 @@ pub struct Memory<F: Future<Output = T>, T> {
     pub status: UninitCell<Status<F, T>>,
 }
 
-// The C representation means we have guarantees on
-// the memory layout of the task
 /// The underlying task containing the core components of a task
 pub struct RawTask<F: Future<Output = T>, T> {
     pub ptr: *mut (),
     pub(crate) _f: PhantomData<F>,
 }
 
+/// A permit to spawn a task onto the executor
+pub struct Permit<F, T>
+where
+    F: Future<Output = T> + 'static,
+    T: 'static,
+{
+    memory: &'static [Memory<F, T>],
+    future: F,
+}
+
+impl<F, T> Permit<F, T>
+where
+    F: Future<Output = T>,
+{
+    pub fn new(memory: &'static [Memory<F, T>], future: impl FnOnce() -> F) -> Permit<F, T> {
+        Permit {
+            memory,
+            future: future(),
+        }
+    }
+    pub fn acquire(self) -> Result<(&'static Memory<F, T>, F), SpawnError> {
+        for m in self.memory {
+            match unsafe { m.status.as_ref() } {
+                Status::Stopped => return Ok((m, self.future)),
+                _ => continue,
+            }
+        }
+
+        Err(SpawnError::QueueFull)
+    }
+}
+
 pub enum Status<F: Future<Output = T>, T> {
+    Stopped,
     Running(F),
     Finished(T),
     Consumed,
@@ -57,7 +91,7 @@ where
         Memory {
             header: UninitCell::uninit(),
             rt: Cell::new(NonNull::dangling()),
-            status: UninitCell::uninit(),
+            status: UninitCell::new(Status::Stopped),
         }
     }
 
@@ -65,18 +99,13 @@ where
         unsafe { self.header.as_ref() }
     }
 
-    pub fn task(&self) -> &Task {
-        &self.header().task
-    }
-
     #[allow(clippy::mut_from_ref)]
     unsafe fn mut_header(&self) -> &mut Header {
         self.header.as_mut()
     }
 
-    #[allow(dead_code)]
-    unsafe fn status(&self) -> &Status<F, T> {
-        self.status.as_ref()
+    pub fn task(&self) -> &Task {
+        &self.header().task
     }
 
     #[allow(clippy::mut_from_ref)]
@@ -96,7 +125,7 @@ where
     const RAW_WAKER_VTABLE: RawWakerVTable =
         RawWakerVTable::new(Self::clone_waker, Self::wake, Self::wake, Self::drop_waker);
 
-    pub fn new(memory: &Memory<F, T>, future: impl FnOnce() -> F) -> RawTask<F, T> {
+    pub fn new(memory: &Memory<F, T>, future: F) -> RawTask<F, T> {
         let ptr = memory as *const _ as *mut ();
 
         let task = Task::new(unsafe { NonNull::new_unchecked(ptr) });
@@ -120,7 +149,7 @@ where
         // TODO: Should I hide safety in UninitCell?
         unsafe { memory.header.write(header) }
 
-        let status = Status::Running(future());
+        let status = Status::Running(future);
         unsafe { memory.status.write(status) };
 
         RawTask {

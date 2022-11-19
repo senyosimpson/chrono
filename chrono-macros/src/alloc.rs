@@ -1,10 +1,22 @@
+use darling::FromMeta;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::ReturnType;
 
-pub(super) fn alloc(f: syn::ItemFn) -> TokenStream {
+#[derive(Debug, FromMeta)]
+struct Args {
+    #[darling(default)]
+    size: Option<usize>,
+}
+
+pub(super) fn alloc(args: syn::AttributeArgs, f: syn::ItemFn) -> TokenStream {
     let mut arg_names = Vec::new();
     let mut fn_args = f.sig.inputs.clone();
+
+    let args = Args::from_list(&args)
+        .map_err(|e| e.write_errors())
+        .unwrap();
+    let size = args.size.unwrap_or(1);
 
     for arg in fn_args.iter_mut() {
         match arg {
@@ -44,10 +56,10 @@ pub(super) fn alloc(f: syn::ItemFn) -> TokenStream {
     let fn_ret = {
         match output.clone() {
             ReturnType::Default => {
-                quote!(::chrono::task::RawTask<#impl_ty, ()>)
+                quote!(::chrono::task::Permit<#impl_ty, ()>)
             }
             ReturnType::Type(_, ret) => {
-                quote!(::chrono::task::RawTask<#impl_ty, #ret>)
+                quote!(::chrono::task::Permit<#impl_ty, #ret>)
             }
         }
     };
@@ -75,8 +87,9 @@ pub(super) fn alloc(f: syn::ItemFn) -> TokenStream {
                 task
             }
 
-            static MEMORY: #memory_type = Memory::alloc();
-            launder_tait(::chrono::task::RawTask::new(&MEMORY, move || #inner_fn_name(#(#arg_names,)*)))
+            const ALLOC: #memory_type = Memory::alloc();
+            static MEMORY: [#memory_type; #size] = [ALLOC; #size];
+            launder_tait(::chrono::task::Permit::new(&MEMORY, move || #inner_fn_name(#(#arg_names,)*)))
         }
     }
     .into()

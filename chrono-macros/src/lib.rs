@@ -4,13 +4,14 @@ mod alloc;
 mod main;
 
 #[proc_macro_attribute]
-pub fn alloc(_: TokenStream, item: TokenStream) -> TokenStream {
-    let f: syn::ItemFn = syn::parse(item).expect("Could not parse input tokenstream");
-    alloc::alloc(f)
+pub fn alloc(args: TokenStream, item: TokenStream) -> TokenStream {
+    let f = syn::parse_macro_input!(item);
+    let args = syn::parse_macro_input!(args);
+    alloc::alloc(args, f)
 }
 
 #[proc_macro_attribute]
 pub fn main(_: TokenStream, item: TokenStream) -> TokenStream {
-    let f: syn::ItemFn = syn::parse(item).expect("Could not parse input tokenstream");
+    let f = syn::parse_macro_input!(item);
     main::main(f)
 }
