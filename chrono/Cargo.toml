@@ -19,7 +19,6 @@ stm32f3xx-hal = { version = "0.9.0", features = ["ld", "stm32f303xc", "defmt"] }
 embedded-time = "0.12.1"
 enc28j60 = { git = "https://github.com/senyosimpson/enc28j60", branch = "master" }
 smoltcp = { version = "0.8.1", default-features = false, features = [
-# smoltcp = { path = "/home/senyeezus/Code/oss/smoltcp", version = "0.8.1", default-features = false, features = [
     "async",
     "defmt",
     "medium-ethernet",
@@ -28,7 +27,7 @@ smoltcp = { version = "0.8.1", default-features = false, features = [
     "proto-ipv6",
     "socket-tcp",
 ] }
-embedded-io = { version = "0.3.0", features = [ "async"] }
+embedded-io = { version = "0.3.1", features = [ "async"] }
 
 [features]
 networking = []

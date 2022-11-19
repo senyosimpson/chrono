@@ -1,6 +1,6 @@
 #![no_std]
 #![no_main]
-#![feature(type_alias_impl_trait, generic_associated_types)]
+#![feature(type_alias_impl_trait)]
 
 use defmt_rtt as _;
 use panic_probe as _;

@@ -1,4 +1,4 @@
-#![feature(generic_associated_types, type_alias_impl_trait, waker_getters)]
+#![feature(type_alias_impl_trait, waker_getters)]
 #![no_std]
 
 pub mod channel;

@@ -156,7 +156,7 @@ impl embedded_io::Io for TcpSocket {
 }
 
 impl AsyncRead for TcpSocket {
-    type ReadFuture<'a> = impl Future<Output = Result<usize, Self::Error>>
+    type ReadFuture<'a> = impl Future<Output = Result<usize, Self::Error>> + 'a
     where
         Self: 'a;
 
@@ -166,7 +166,7 @@ impl AsyncRead for TcpSocket {
 }
 
 impl AsyncWrite for TcpSocket {
-    type WriteFuture<'a> = impl Future<Output = Result<usize, Self::Error>>
+    type WriteFuture<'a> = impl Future<Output = Result<usize, Self::Error>> + 'a
     where
         Self: 'a;
 
@@ -174,7 +174,7 @@ impl AsyncWrite for TcpSocket {
         poll_fn(|cx| self.poll_write(cx, buf))
     }
 
-    type FlushFuture<'a> = impl Future<Output = Result<(), Self::Error>>
+    type FlushFuture<'a> = impl Future<Output = Result<(), Self::Error>> + 'a
     where
         Self: 'a;
 
