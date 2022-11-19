@@ -44,28 +44,6 @@ where
     future: F,
 }
 
-impl<F, T> Permit<F, T>
-where
-    F: Future<Output = T>,
-{
-    pub fn new(memory: &'static [Memory<F, T>], future: impl FnOnce() -> F) -> Permit<F, T> {
-        Permit {
-            memory,
-            future: future(),
-        }
-    }
-    pub fn acquire(self) -> Result<(&'static Memory<F, T>, F), SpawnError> {
-        for m in self.memory {
-            match unsafe { m.status.as_ref() } {
-                Status::Stopped => return Ok((m, self.future)),
-                _ => continue,
-            }
-        }
-
-        Err(SpawnError::QueueFull)
-    }
-}
-
 pub enum Status<F: Future<Output = T>, T> {
     Stopped,
     Running(F),
@@ -275,6 +253,28 @@ where
         let header = memory.mut_header();
         // unset join handle bit
         header.state.unset_join_handle();
+    }
+}
+
+impl<F, T> Permit<F, T>
+where
+    F: Future<Output = T>,
+{
+    pub fn new(memory: &'static [Memory<F, T>], future: impl FnOnce() -> F) -> Permit<F, T> {
+        Permit {
+            memory,
+            future: future(),
+        }
+    }
+    pub fn acquire(self) -> Result<(&'static Memory<F, T>, F), SpawnError> {
+        for m in self.memory {
+            match unsafe { m.status.as_ref() } {
+                Status::Stopped => return Ok((m, self.future)),
+                _ => continue,
+            }
+        }
+
+        Err(SpawnError::QueueFull)
     }
 }
 
