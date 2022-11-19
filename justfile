@@ -5,6 +5,10 @@
 check:
   cargo clippy --all-targets -- -A clippy::module_inception -A clippy::new_ret_no_self -A clippy::zero_ptr -A clippy::new_without_default
 
+# Watch docs
+watch-docs:
+  cargo watch --features networking -x 'doc --no-deps --document-private-items --open'
+
 # Setup network interface
 setup-interface interface:
   sudo iptables -A INPUT -i {{interface}} -j ACCEPT
