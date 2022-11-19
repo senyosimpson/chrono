@@ -9,7 +9,7 @@ struct Args {
     size: Option<usize>,
 }
 
-pub(super) fn alloc(args: syn::AttributeArgs, f: syn::ItemFn) -> TokenStream {
+pub(crate) fn alloc(args: syn::AttributeArgs, f: syn::ItemFn) -> TokenStream {
     let mut arg_names = Vec::new();
     let mut fn_args = f.sig.inputs.clone();
 
