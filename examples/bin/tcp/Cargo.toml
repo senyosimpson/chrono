@@ -8,7 +8,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-chrono = { path = "../../chrono", features = ["networking"]}
+chrono = { path = "../../../chrono", features = ["networking"]}
 panic-probe = { version = "0.3.0", features = ["print-defmt"] }
 cortex-m = "0.7.4"
 cortex-m-rt = "0.7.1"
