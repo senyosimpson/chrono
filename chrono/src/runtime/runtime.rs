@@ -6,7 +6,7 @@ use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use super::context;
 use super::queue::{TaskQueue, TimerQueue};
 use crate::task::join::JoinHandle;
-use crate::task::RawTask;
+use crate::task::{RawTask, Permit};
 use crate::time::instant::Instant;
 
 pub struct Runtime {
@@ -49,9 +49,9 @@ impl Runtime {
     /// Spawn a task onto the runtime
     pub fn spawn<F: Future<Output = T>, T>(
         &'static self,
-        raw: RawTask<F, T>,
+        permit: Permit<F, T>,
     ) -> Result<JoinHandle<T>, SpawnError> {
-        self.handle().spawn(raw)
+        self.handle().spawn(permit)
     }
 
     pub fn block_on<F: Future>(&'static self, future: F) -> F::Output {
@@ -113,9 +113,9 @@ unsafe impl Sync for Runtime {}
 impl Handle {
     pub fn spawn<F: Future<Output = T>, T>(
         &self,
-        raw: RawTask<F, T>,
+        permit: Permit<F, T>,
     ) -> Result<JoinHandle<T>, SpawnError> {
-        self.spawner.spawn(raw)
+        self.spawner.spawn(permit)
     }
 }
 
@@ -129,9 +129,10 @@ pub enum SpawnError {
 impl Spawner {
     pub fn spawn<F: Future<Output = T>, T>(
         &self,
-        raw: RawTask<F, T>,
+        permit: Permit<F, T>,
     ) -> Result<JoinHandle<T>, SpawnError> {
-        let memory = raw.memory();
+        let (memory, future) = permit.acquire()?;
+        let raw = RawTask::new(memory, future);
 
         let rt = unsafe { NonNull::new_unchecked(self.rt as *const _ as *mut _) };
         memory.rt.replace(rt);
@@ -148,10 +149,6 @@ impl Spawner {
         let task = memory.task();
         task.schedule();
 
-        let spawned: Result<(), ()> = Ok(());
-        if spawned.is_err() {
-            return Err(SpawnError::QueueFull);
-        }
         defmt::debug!("Task {}: Spawned", task.id);
 
         Ok(join_handle)

@@ -6,7 +6,7 @@ pub(crate) mod join;
 pub use join::JoinHandle;
 
 mod raw;
-pub use raw::{Memory, RawTask};
+pub use raw::{Memory, RawTask, Permit};
 
 mod spawn;
 pub use spawn::spawn;

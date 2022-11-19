@@ -11,6 +11,10 @@ impl<T> UninitCell<T> {
         Self(MaybeUninit::uninit())
     }
 
+    pub const fn new(value: T) -> Self {
+        Self(MaybeUninit::new(UnsafeCell::new(value)))
+    }
+
     pub unsafe fn as_mut_ptr(&self) -> *mut T {
         (*self.0.as_ptr()).get()
     }
