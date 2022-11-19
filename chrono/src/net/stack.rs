@@ -9,9 +9,8 @@ use smoltcp::iface::{
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 
 use super::devices::Enc28j60;
+use super::MAC_ADDR;
 use crate::time::Instant;
-
-const MAC_ADDR: [u8; 6] = [0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
 
 static mut STORAGE: MaybeUninit<Storage> = MaybeUninit::uninit();
 

@@ -1,10 +1,15 @@
-use crate::hal::delay::Delay;
 use crate::hal::pac;
 use crate::hal::prelude::*;
-use crate::hal::spi::Spi;
-use crate::net::stack;
-use crate::net::devices::Enc28j60;
 use crate::time;
+
+#[cfg(feature = "networking")]
+use {
+    crate::hal::delay::Delay,
+    crate::hal::spi::Spi,
+    crate::net::devices::Enc28j60,
+    crate::net::stack,
+    crate::net::MAC_ADDR
+};
 
 pub fn init() {
     defmt::debug!("Initialising system");
@@ -28,7 +33,6 @@ pub fn init() {
     let mut core_peripherals = unsafe { pac::CorePeripherals::steal() };
     core_peripherals.DCB.enable_trace();
     core_peripherals.DWT.enable_cycle_counter();
-    drop(core_peripherals.DWT);
 
     // init time driver
     defmt::debug!("Initialised time driver");
@@ -38,7 +42,6 @@ pub fn init() {
     {
         const KB: u16 = 1024; // bytes
         const RX_BUF_SIZE: u16 = 7 * KB;
-        const MAC_ADDR: [u8; 6] = [0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
 
         let mut gpioa = peripherals.GPIOA.split(&mut rcc.ahb);
 
