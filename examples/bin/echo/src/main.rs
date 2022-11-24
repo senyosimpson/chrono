@@ -28,7 +28,10 @@ async fn handle_tcp_conn() {
             let mut buf = [0; 64];
             let bytes = match socket.read(&mut buf).await {
                 Ok(0) => break,
-                Ok(n) => defmt::debug!("Read {} bytes", n),
+                Ok(n) => {
+                    defmt::debug!("Read {} bytes", n);
+                    n
+                }
                 Err(e) => panic!("Read error: {}", e),
             };
 
