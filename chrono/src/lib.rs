@@ -1,5 +1,5 @@
-#![feature(type_alias_impl_trait, waker_getters)]
 #![no_std]
+#![feature(type_alias_impl_trait, waker_getters)]
 
 pub mod channel;
 pub use channel::mpsc;
