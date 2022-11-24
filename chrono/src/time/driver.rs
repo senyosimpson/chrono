@@ -53,7 +53,7 @@ impl Driver {
     }
 
     pub fn handle_interrupt(&mut self) {
-        cortex_m::interrupt::free(|_cs| {
+        cortex_m::interrupt::free(|_| {
             defmt::debug!("Interrupt triggered!");
             let mut inner = self.inner.as_ref().unwrap().borrow_mut();
             inner.timer.clear_event(Event::Update);
