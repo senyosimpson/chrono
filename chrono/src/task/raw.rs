@@ -17,7 +17,10 @@ use crate::Runtime;
 // The C representation means we have guarantees on
 // the memory layout of the task
 #[repr(C)]
-pub struct Memory<F: Future<Output = T>, T> {
+pub struct Memory<F, T>
+where
+    F: Future<Output = T>,
+{
     /// Header of the task. Contains data related to the state
     /// of a task
     pub header: UninitCell<Header>,
@@ -29,7 +32,10 @@ pub struct Memory<F: Future<Output = T>, T> {
 }
 
 /// The underlying task containing the core components of a task
-pub struct RawTask<F: Future<Output = T>, T> {
+pub struct RawTask<F, T>
+where
+    F: Future<Output = T>,
+{
     pub ptr: *mut (),
     pub(crate) _f: PhantomData<F>,
 }
@@ -44,7 +50,10 @@ where
     future: F,
 }
 
-pub enum Status<F: Future<Output = T>, T> {
+pub enum Status<F, T>
+where
+    F: Future<Output = T>,
+{
     Stopped,
     Running(F),
     Finished(T),
@@ -256,6 +265,8 @@ where
     }
 }
 
+// ===== impl Permit =====
+
 impl<F, T> Permit<F, T>
 where
     F: Future<Output = T>,
@@ -280,7 +291,10 @@ where
 
 // ====== impl Status =====
 
-impl<F: Future<Output = T>, T> Status<F, T> {
+impl<F, T> Status<F, T>
+where
+    F: Future<Output = T>,
+{
     fn poll(&mut self, cx: &mut Context<'_>) -> Poll<F::Output> {
         let future = match self {
             Status::Running(future) => future,
