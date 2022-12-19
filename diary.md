@@ -897,3 +897,9 @@ on the embedded system. Setting the iptables to accept all traffic to the interf
 - Global stack so we have something that acts like a daemon
 - Polling the interface for packets instead of interrupts
 - Implementing the traits for TCP
+
+### Spawn permits
+
+Needed to restructure the code so that when we allocate memory, we get a permit. The permit holds a reference
+to the underlying memory. We then try acquire a slot of the memory. If its available, we can spawn a
+task, otherwise it fails.
