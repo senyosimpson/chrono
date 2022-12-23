@@ -21,8 +21,10 @@ async fn worker(id: u8, message: Vec<u8>) -> Result<(), io::Error> {
     println!("Worker {id} starting");
 
     let mut stream = TcpStream::connect("192.168.69.1:7777").await?;
-    let mut buf = [0u8; 12];
+    let mut buf = [0u8; 64];
 
+    // Split reader and writer. Writer can be rate limited
+    // but no need to rate limit reading
     loop {
         stream.write_all(&message).await?;
         stream.read(&mut buf).await?;
@@ -42,12 +44,12 @@ async fn main() -> Result<(), io::Error> {
 
     for id in 0..workers {
         let mut rng = rand::thread_rng();
-        let message: Vec<u8> = (0..64).map(|_| rng.gen_range(0..255)).collect();
+        let message: Vec<u8> = (0..64).map(|_| rng.gen_range(97..=122)).collect();
 
         set.spawn(worker(id + 1, message));
     }
 
-    set.join_next().await;
+    set.join_next().await.unwrap().unwrap().unwrap();
 
     Ok(())
 }
