@@ -15,6 +15,14 @@ setup-interface interface:
   sudo iptables -A OUTPUT -o {{interface}} -j ACCEPT
   
   sudo ip addr add 192.168.69.100/24 dev {{interface}}
+
+# ping
+ping interface:
+  ping -I {{interface}} 192.168.69.1
+
+# arping
+arping interface:
+  sudo arping -I {{interface}} 192.168.69.1
   
 
 # Socat listener
