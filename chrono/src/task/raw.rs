@@ -218,8 +218,11 @@ where
             }
             Poll::Ready(_) => {
                 header.state.transition_to_complete();
-                if header.state.has_join_waker() {
-                    header.wake_join_handle();
+
+                if header.state.has_join_handle() {
+                    if header.state.has_join_waker() {
+                        header.wake_join_handle();
+                    }
                 } else {
                     // Drop the future or output by replacing it with Consumed
                     status.drop_future_or_output();

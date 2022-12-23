@@ -39,6 +39,10 @@ impl State {
         }
     }
 
+    pub fn has_join_handle(&mut self) -> bool {
+        self.state & JOIN_HANDLE == JOIN_HANDLE
+    }
+
     pub fn unset_join_handle(&mut self) {
         self.state &= !JOIN_HANDLE;
     }
