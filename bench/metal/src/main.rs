@@ -1,41 +1,50 @@
+use std::io;
 use std::time::Duration;
 
-use std::io;
-
+use clap::Parser;
+use rand::Rng;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 
-async fn blacksmith(id: u8) -> Result<(), io::Error> {
-    println!("conn {id} starting");
-    let messages = ["hello chrono", "chrono hello"];
+/// A load testing tool for Chrono
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Number of concurrent workers
+    #[arg(long, default_value_t = 1)]
+    workers: u8,
+}
+
+async fn worker(id: u8, message: Vec<u8>) -> Result<(), io::Error> {
+    println!("Worker {id} starting");
+
     let mut stream = TcpStream::connect("192.168.69.1:7777").await?;
-    let mut i = 0;
     let mut buf = [0u8; 12];
 
     loop {
-        i += 1;
-
-        let choice = if i % 2 == 0 { 0 } else { 1 };
-        let message = messages[choice];
-
-        stream.write_all(message.as_bytes()).await?;
+        stream.write_all(&message).await?;
         stream.read(&mut buf).await?;
+        println!("Worker {}: {}", id, std::str::from_utf8(&buf).unwrap());
 
         sleep(Duration::from_secs(1)).await;
-        println!("conn {}: {}", id, std::str::from_utf8(&buf).unwrap());
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
-    let blacksmiths = 32;
-    println!("Creating {blacksmiths} blacksmiths");
+    let args = Args::parse();
+    let workers = args.workers;
+
+    println!("Creating {workers} workers");
     let mut set = JoinSet::new();
 
-    for id in 0..blacksmiths {
-        set.spawn(blacksmith(id));
+    for id in 0..workers {
+        let mut rng = rand::thread_rng();
+        let message: Vec<u8> = (0..64).map(|_| rng.gen_range(0..255)).collect();
+
+        set.spawn(worker(id + 1, message));
     }
 
     set.join_next().await;
