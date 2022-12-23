@@ -132,10 +132,6 @@ fn main() -> ! {
     let tcp_socket = TcpSocket::new(rx_buffer, tx_buffer);
     let tcp_handle = interface.add_socket(tcp_socket);
 
-    let socket = interface.get_socket::<TcpSocket>(tcp_handle);
-    socket.listen(7777).expect("Could not listen on port 7777");
-    drop(socket);
-
     loop {
         let timestamp = Instant::now();
         match interface.poll(timestamp.into()) {
@@ -146,6 +142,9 @@ fn main() -> ! {
         }
 
         let socket = interface.get_socket::<TcpSocket>(tcp_handle);
+        if !socket.is_open() {
+            socket.listen(7777).expect("Could not listen on port 7777");
+        }
 
         if socket.may_recv() {
             let (bytes, data) = match socket.recv(|buffer| {
@@ -172,11 +171,9 @@ fn main() -> ! {
                     Err(e) => defmt::debug!("Send error: {}", e),
                 }
             }
+        } else if socket.may_send() {
+            defmt::debug!("tcp close");
+            socket.close();
         }
-
-        // } else if socket.may_send() {
-        //     defmt::debug!("tcp close");
-        //     socket.close();
-        // }
     }
 }
