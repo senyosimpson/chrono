@@ -30,18 +30,19 @@ async fn main() -> ! {
 
     let (tx, rx) = mpsc::split(&CHANNEL);
     let res = chrono::spawn(send(tx));
-    let handle = match res {
+    let h1 = match res {
         Ok(handle) => handle,
         Err(_) => panic!("Could not spawn task!"),
     };
-    let _output = handle.await;
 
     let res = chrono::spawn(receive(rx));
-    let handle = match res {
+    let h2 = match res {
         Ok(handle) => handle,
         Err(_) => panic!("Could not spawn task!"),
     };
-    let _output = handle.await;
+
+    let _ = h1.await;
+    let _ = h2.await;
 
     defmt::info!("Success!");
 }
