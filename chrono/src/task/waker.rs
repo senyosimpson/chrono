@@ -1,12 +1,9 @@
-use core::{
-    ops::Deref,
-    task::{RawWaker, RawWakerVTable, Waker},
-};
+use core::task::{RawWaker, RawWakerVTable, Waker};
 
 use super::header::Header;
 
 /// A waker that does absolutely nothing
-struct NoopWaker(RawWaker);
+pub(crate) struct NoopWaker(RawWaker);
 
 // ===== impl Noopwaker =====
 
@@ -14,31 +11,14 @@ impl NoopWaker {
     const RAW_WAKER_VTABLE: RawWakerVTable =
         RawWakerVTable::new(Self::clone, Self::no_op, Self::no_op, Self::no_op);
 
-    pub fn new() -> NoopWaker {
-        fn no_op(_: *const ()) {}
-        fn clone(_: *const ()) -> RawWaker {
-            NoopWaker::new().into()
-        }
-
-        NoopWaker(RawWaker::new(0 as *const (), &Self::RAW_WAKER_VTABLE))
+    pub fn raw() -> RawWaker {
+        RawWaker::new(0 as *const (), &Self::RAW_WAKER_VTABLE)
     }
 
     fn no_op(_: *const ()) {}
 
     fn clone(_: *const ()) -> RawWaker {
-        NoopWaker::new().into()
-    }
-}
-
-impl From<NoopWaker> for RawWaker {
-    fn from(waker: NoopWaker) -> Self {
-        RawWaker::new(0 as *const (), &NoopWaker::RAW_WAKER_VTABLE)
-    }
-}
-
-impl From<NoopWaker> for Waker {
-    fn from(value: NoopWaker) -> Self {
-        unsafe { Waker::from_raw(NoopWaker::new().into()) }
+        NoopWaker::raw()
     }
 }
 

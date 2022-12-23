@@ -1,12 +1,13 @@
 use core::future::Future;
 use core::marker::PhantomData;
 use core::ptr::NonNull;
-use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use core::task::{Context, Poll, Waker};
 
 use super::context;
 use super::queue::{TaskQueue, TimerQueue};
 use crate::task::join::JoinHandle;
 use crate::task::{RawTask, Permit};
+use crate::task::waker::NoopWaker;
 use crate::time::instant::Instant;
 
 pub struct Runtime {
@@ -60,7 +61,7 @@ impl Runtime {
 
         crate::pin!(future);
 
-        let waker = unsafe { Waker::from_raw(NoopWaker::new()) };
+        let waker = unsafe { Waker::from_raw(NoopWaker::raw()) };
         let cx = &mut Context::from_waker(&waker);
 
         loop {
@@ -153,21 +154,5 @@ impl Spawner {
         defmt::debug!("{}, {}: Spawned", task.id, task.generation);
 
         Ok(join_handle)
-    }
-}
-
-// ===== No op waker =====
-
-struct NoopWaker;
-
-impl NoopWaker {
-    fn new() -> RawWaker {
-        fn no_op(_: *const ()) {}
-        fn clone(_: *const ()) -> RawWaker {
-            NoopWaker::new()
-        }
-
-        let vtable = &RawWakerVTable::new(clone, no_op, no_op, no_op);
-        RawWaker::new(0 as *const (), vtable)
     }
 }
