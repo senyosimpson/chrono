@@ -1,0 +1,19 @@
+[package]
+name = "echo-async"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+chrono = { path = "../../../chrono", features = ["networking"]}
+
+panic-probe = { version = "0.3.0", features = ["print-defmt"] }
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7"
+defmt-rtt = "0.3"
+stm32f3 = { version = "0.14.0", features = ["stm32f303", "rt"] }
+defmt = "0.3"
+
+[profile.release]
+debug = 0
