@@ -3,6 +3,7 @@
 #![feature(type_alias_impl_trait)]
 
 use defmt_rtt as _;
+use heapless::Vec;
 use panic_probe as _;
 use stm32f3 as _;
 
@@ -22,7 +23,8 @@ const MAC_ADDR: [u8; 6] = [0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
 const KB: u16 = 1024; // bytes
 const RX_BUF_SIZE: u16 = 7 * KB;
 
-fn main() -> Result<(), smoltcp::Error> {
+#[cortex_m_rt::entry]
+fn main() -> ! {
     defmt::debug!("Initialising system");
 
     let peripherals = unsafe { pac::Peripherals::steal() };
@@ -102,7 +104,7 @@ fn main() -> Result<(), smoltcp::Error> {
     let mut neighbor_cache_storage: [Option<(IpAddress, Neighbor)>; 2] = [None; 2];
     let mut routes_storage: [Option<(IpCidr, Route)>; 1] = [None; 1];
     let mut sockets_storage = [SocketStorage::EMPTY; 32];
-    let mut ip_addrs_storage: [IpCidr; 1] = [IpCidr::new(IpAddress::v4(192, 168, 68, 1), 24)];
+    let mut ip_addrs_storage: [IpCidr; 1] = [IpCidr::new(IpAddress::v4(192, 168, 69, 1), 24)];
 
     let neighbor_cache = NeighborCache::new(&mut neighbor_cache_storage[..]);
 
@@ -110,7 +112,9 @@ fn main() -> Result<(), smoltcp::Error> {
 
     let default_v4_gw = Ipv4Address::new(192, 168, 69, 100);
     let mut routes = Routes::new(&mut routes_storage[..]);
-    routes.add_default_ipv4_route(default_v4_gw)?;
+    routes
+        .add_default_ipv4_route(default_v4_gw)
+        .expect("Failed to add default ipv4 route");
 
     let mut interface = InterfaceBuilder::new(device, &mut sockets_storage[..])
         .ip_addrs(&mut ip_addrs_storage[..])
@@ -129,7 +133,7 @@ fn main() -> Result<(), smoltcp::Error> {
     let tcp_handle = interface.add_socket(tcp_socket);
 
     let socket = interface.get_socket::<TcpSocket>(tcp_handle);
-    socket.listen(7777)?;
+    socket.listen(7777).expect("Could not listen on port 7777");
     drop(socket);
 
     loop {
@@ -144,21 +148,32 @@ fn main() -> Result<(), smoltcp::Error> {
         let socket = interface.get_socket::<TcpSocket>(tcp_handle);
 
         if socket.may_recv() {
-            let (bytes, data) = socket.recv(|buffer| {
-                let data: [u8; 64] = buffer.try_into().expect("could not convert data");
+            let (bytes, data) = match socket.recv(|buffer| {
+                let data: Vec<u8, 64> =
+                    Vec::from_slice(buffer).expect("Could not create vector from slice");
 
                 if !data.is_empty() {
-                    defmt::debug!("recv data: {:?}", data);
+                    defmt::debug!("Recv data: {:?}", &data[..data.len()]);
                 }
 
                 (buffer.len(), (buffer.len(), data))
-            })?;
+            }) {
+                Ok(res) => res,
+                Err(e) => {
+                    defmt::debug!("Recv error: {}", e);
+                    continue;
+                }
+            };
 
             if socket.can_send() && !data.is_empty() {
-                defmt::debug!("send data: {:?}", data);
-                socket.send_slice(&data[..bytes])?;
+                defmt::debug!("Send data: {:?}", &data[..bytes]);
+                match socket.send_slice(&data[..bytes]) {
+                    Ok(_) => {}
+                    Err(e) => defmt::debug!("Send error: {}", e),
+                }
             }
         }
+
         // } else if socket.may_send() {
         //     defmt::debug!("tcp close");
         //     socket.close();
