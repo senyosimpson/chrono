@@ -35,7 +35,7 @@ pub fn init() {
     core_peripherals.DWT.enable_cycle_counter();
 
     // init time driver
-    defmt::debug!("Initialised time driver");
+    defmt::trace!("Initialising time driver");
     time::driver().init(peripherals.TIM2, clocks, &mut rcc.apb1);
 
     #[cfg(feature = "networking")]
@@ -102,4 +102,6 @@ pub fn init() {
         let device = Enc28j60::new(enc28j60);
         stack().init(device);
     }
+
+    defmt::debug!("Done!");
 }

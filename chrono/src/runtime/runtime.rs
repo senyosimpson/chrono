@@ -90,12 +90,13 @@ impl Runtime {
             }
 
             // Prepare the task queue before walking through it
-            self.tasks.prepare();
+            let generation = self.tasks.prepare();
+            defmt::trace!("Processing {}", generation);
             loop {
                 let task = self.tasks.pop_front();
                 match task {
                     Some(task) => {
-                        defmt::trace!("Task {}: Popped off executor queue and running", task.id);
+                        defmt::trace!("{}, {}: Popped off executor queue and running", task.id, task.generation);
                         task.run()
                     }
                     None => break,
@@ -149,7 +150,7 @@ impl Spawner {
         let task = memory.task();
         task.schedule();
 
-        defmt::debug!("Task {}: Spawned", task.id);
+        defmt::debug!("{}, {}: Spawned", task.id, task.generation);
 
         Ok(join_handle)
     }

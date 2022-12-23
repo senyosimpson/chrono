@@ -172,7 +172,7 @@ where
         let header = memory.mut_header();
 
         let task = memory.task();
-        defmt::trace!("Task {}: Waking raw task", task.id);
+        defmt::trace!("{}: Waking raw task", task.id);
 
         header.state.transition_to_scheduled();
         Self::schedule(ptr);

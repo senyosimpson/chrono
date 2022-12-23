@@ -25,7 +25,7 @@ impl<T> Future for JoinHandle<T> {
 
             let id = header.task.id;
             defmt::trace!(
-                "Task {}: JoinHandle is complete: {}",
+                "{}: JoinHandle is complete: {}",
                 id,
                 header.state.is_complete()
             );
@@ -35,7 +35,7 @@ impl<T> Future for JoinHandle<T> {
                 header.register_waker(cx.waker());
                 header.state.set_join_waker();
             } else {
-                defmt::trace!("Task {}: JoinHandle ready", id);
+                defmt::trace!("{}: JoinHandle ready", id);
                 (header.vtable.get_output)(self.raw.as_ptr(), &mut output as *mut _ as *mut ());
             }
         }

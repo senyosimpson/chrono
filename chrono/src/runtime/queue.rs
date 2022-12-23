@@ -20,7 +20,7 @@ pub(crate) struct LinkedList {
     pub generation: Cell<Generation>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
 pub struct Generation(pub u8);
 
 // ===== impl TaskQueue =====
@@ -182,8 +182,10 @@ impl LinkedList {
         }
     }
 
-    pub fn prepare(&self) {
-        self.generation.replace(self.generation().next());
+    pub fn prepare(&self) -> Generation {
+        let generation = self.generation().next();
+        self.generation.replace(generation);
+        generation
     }
 
     /// Get the current generation of the list
