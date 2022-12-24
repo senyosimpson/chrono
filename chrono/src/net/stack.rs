@@ -17,9 +17,9 @@ static mut STORAGE: MaybeUninit<Storage> = MaybeUninit::uninit();
 pub static mut STACK: Stack = Stack::new();
 
 struct Storage {
-    neighbor_cache: [Option<(IpAddress, Neighbor)>; 16],
+    neighbor_cache: [Option<(IpAddress, Neighbor)>; 2],
     routes: [Option<(IpCidr, Route)>; 1],
-    sockets: [SocketStorage<'static>; 16],
+    sockets: [SocketStorage<'static>; 32],
     ip_addrs: [IpCidr; 1],
 }
 
@@ -49,9 +49,9 @@ impl Stack {
     pub fn init(&mut self, device: Enc28j60) {
         let storage = {
             let s = Storage {
-                neighbor_cache: [None; 16],
+                neighbor_cache: [None; 2],
                 routes: [None; 1],
-                sockets: [SocketStorage::EMPTY; 16],
+                sockets: [SocketStorage::EMPTY; 32],
                 ip_addrs: [IpCidr::new(IpAddress::v4(192, 168, 69, 1), 24)],
             };
             unsafe { STORAGE.write(s) }
