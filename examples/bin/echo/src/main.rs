@@ -14,7 +14,7 @@ async fn netd() {
     chrono::net::stack().start().await
 }
 
-#[chrono::alloc(size = 32)]
+#[chrono::alloc(size = 4)]
 async fn handle_tcp_conn() {
     loop {
         let (mut tx_buffer, mut rx_buffer) = chrono::net::buffer::<64>();
@@ -49,7 +49,7 @@ async fn handle_tcp_conn() {
 #[chrono::main]
 async fn main() -> ! {
     let stack = chrono::spawn(netd()).expect("Could not spawn net daemon");
-    for _ in 0..32 {
+    for _ in 0..4 {
         chrono::spawn(handle_tcp_conn()).unwrap();
     }
 
