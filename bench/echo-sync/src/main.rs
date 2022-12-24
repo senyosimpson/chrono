@@ -8,7 +8,7 @@ use panic_probe as _;
 use stm32f3 as _;
 
 use smoltcp::iface::{InterfaceBuilder, Neighbor, NeighborCache, Route, Routes, SocketStorage};
-use smoltcp::socket::{TcpSocket, TcpSocketBuffer};
+use smoltcp::socket::{AnySocket, TcpSocket, TcpSocketBuffer};
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 
 use stm32f3xx_hal::delay::Delay;
@@ -22,6 +22,9 @@ use chrono::time::Instant;
 const MAC_ADDR: [u8; 6] = [0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
 const KB: u16 = 1024; // bytes
 const RX_BUF_SIZE: u16 = 7 * KB;
+
+const NUM_SOCKETS: usize = 50;
+static mut BUFFERS: [([u8; 64], [u8; 64]); NUM_SOCKETS] = [([0; 64], [0; 64]); NUM_SOCKETS];
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -103,7 +106,7 @@ fn main() -> ! {
     defmt::debug!("Initialised ethernet device");
     let mut neighbor_cache_storage: [Option<(IpAddress, Neighbor)>; 2] = [None; 2];
     let mut routes_storage: [Option<(IpCidr, Route)>; 1] = [None; 1];
-    let mut sockets_storage = [SocketStorage::EMPTY; 32];
+    let mut sockets_storage = [SocketStorage::EMPTY; NUM_SOCKETS];
     let mut ip_addrs_storage: [IpCidr; 1] = [IpCidr::new(IpAddress::v4(192, 168, 69, 1), 24)];
 
     let neighbor_cache = NeighborCache::new(&mut neighbor_cache_storage[..]);
@@ -124,13 +127,14 @@ fn main() -> ! {
 
     defmt::debug!("Done!");
 
-    let mut rx_buffer_storage = [0; 64];
-    let mut tx_buffer_storage = [0; 64];
-
-    let rx_buffer = TcpSocketBuffer::new(&mut rx_buffer_storage[..]);
-    let tx_buffer = TcpSocketBuffer::new(&mut tx_buffer_storage[..]);
-    let tcp_socket = TcpSocket::new(rx_buffer, tx_buffer);
-    let tcp_handle = interface.add_socket(tcp_socket);
+    unsafe {
+        for (rx_buffer, tx_buffer) in BUFFERS.iter_mut() {
+            let rx_buffer = TcpSocketBuffer::new(&mut rx_buffer[..]);
+            let tx_buffer = TcpSocketBuffer::new(&mut tx_buffer[..]);
+            let tcp_socket = TcpSocket::new(rx_buffer, tx_buffer);
+            interface.add_socket(tcp_socket);
+        }
+    }
 
     loop {
         let timestamp = Instant::now();
@@ -141,39 +145,44 @@ fn main() -> ! {
             }
         }
 
-        let socket = interface.get_socket::<TcpSocket>(tcp_handle);
-        if !socket.is_open() {
-            socket.listen(7777).expect("Could not listen on port 7777");
-        }
-
-        if socket.may_recv() {
-            let (bytes, data) = match socket.recv(|buffer| {
-                let data: Vec<u8, 64> =
-                    Vec::from_slice(buffer).expect("Could not create vector from slice");
-
-                if !data.is_empty() {
-                    defmt::debug!("Recv data: {:?}", &data[..data.len()]);
-                }
-
-                (buffer.len(), (buffer.len(), data))
-            }) {
-                Ok(res) => res,
-                Err(e) => {
-                    defmt::debug!("Recv error: {}", e);
-                    continue;
-                }
-            };
-
-            if socket.can_send() && !data.is_empty() {
-                defmt::debug!("Send data: {:?}", &data[..bytes]);
-                match socket.send_slice(&data[..bytes]) {
-                    Ok(_) => {}
-                    Err(e) => defmt::debug!("Send error: {}", e),
-                }
+        for (i, (_, socket)) in interface.sockets_mut().enumerate() {
+            // let socket = interface.get_socket::<TcpSocket>(tcp_handle);
+            // Note: safe to unwrap since we only have TCP sockets
+            let socket = TcpSocket::downcast(socket).unwrap();
+            if !socket.is_open() {
+                socket.listen(7777).expect("Could not listen on port 7777");
+                defmt::info!("Socket {}: Listening on port 7777", i + 1);
             }
-        } else if socket.may_send() {
-            defmt::debug!("tcp close");
-            socket.close();
+
+            if socket.may_recv() {
+                let (bytes, data) = match socket.recv(|buffer| {
+                    let data: Vec<u8, 64> =
+                        Vec::from_slice(buffer).expect("Could not create vector from slice");
+
+                    if !data.is_empty() {
+                        defmt::debug!("Recv data: {:?}", &data[..data.len()]);
+                    }
+
+                    (buffer.len(), (buffer.len(), data))
+                }) {
+                    Ok(res) => res,
+                    Err(e) => {
+                        defmt::debug!("Recv error: {}", e);
+                        continue;
+                    }
+                };
+
+                if socket.can_send() && !data.is_empty() {
+                    defmt::debug!("Send data: {:?}", &data[..bytes]);
+                    match socket.send_slice(&data[..bytes]) {
+                        Ok(_) => {}
+                        Err(e) => defmt::debug!("Send error: {}", e),
+                    }
+                }
+            } else if socket.may_send() {
+                defmt::debug!("tcp close");
+                socket.close();
+            }
         }
     }
 }
