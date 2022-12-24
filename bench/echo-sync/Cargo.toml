@@ -26,3 +26,6 @@ smoltcp = { version = "0.8.1", default-features = false, features = [
     "proto-ipv6",
     "socket-tcp",
 ] }
+
+[profile.release]
+debug = 0

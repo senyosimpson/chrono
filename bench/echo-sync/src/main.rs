@@ -46,8 +46,6 @@ fn main() -> ! {
     let clocks = cfg.freeze(&mut flash.acr);
 
     let core_peripherals = unsafe { pac::CorePeripherals::steal() };
-    // core_peripherals.DCB.enable_trace();
-    // core_peripherals.DWT.enable_cycle_counter();
 
     let mut gpioa = peripherals.GPIOA.split(&mut rcc.ahb);
 
@@ -136,10 +134,11 @@ fn main() -> ! {
         }
     }
 
+    defmt::info!("Starting stack!");
     loop {
         let timestamp = Instant::now();
         match interface.poll(timestamp.into()) {
-            Ok(_) => {}
+            Ok(_) => { defmt::trace!("Polling") }
             Err(e) => {
                 defmt::info!("poll error: {}", e);
             }
