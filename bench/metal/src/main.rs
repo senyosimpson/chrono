@@ -1,5 +1,5 @@
 use std::io;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use clap::Parser;
 use rand::Rng;
@@ -23,14 +23,20 @@ async fn worker(id: u8, message: Vec<u8>) -> Result<(), io::Error> {
     let mut stream = TcpStream::connect("192.168.69.1:7777").await?;
     let mut buf = [0u8; 64];
 
-    // Split reader and writer. Writer can be rate limited
-    // but no need to rate limit reading
+    // Split reader and writer
     loop {
+        let start = Instant::now();
         stream.write_all(&message).await?;
         stream.read(&mut buf).await?;
-        println!("Worker {}: {}", id, std::str::from_utf8(&buf).unwrap());
+        let end = Instant::now();
 
-        sleep(Duration::from_secs(1)).await;
+        let rtt = end - start;
+        println!(
+            "Worker {}: message={} rtt={}ms",
+            id,
+            std::str::from_utf8(&buf).unwrap(),
+            rtt.as_millis()
+        );
     }
 }
 
