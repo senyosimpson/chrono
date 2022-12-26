@@ -199,15 +199,14 @@ impl LinkedList {
     }
 
     /// Add an element to the back of list
-    pub fn push_back(&mut self, task: NonNull<Task>) {
-        defmt::trace!("Inserting into task queue");
+    pub fn push_back(&mut self, mut task: NonNull<Task>) {
         unsafe {
+            // Set the generation of the new task to the next generation
+            // so that we only process it on the next round
+            task.as_mut().set_generation(self.generation().next());
+
             if let Some(mut tail) = self.tail.get() {
                 tail.as_mut().tasks.set_next(Some(task));
-                // Set the generation of the new task to the next generation
-                // so that we only process it on the next round
-                tail.as_mut()
-                    .set_generation(self.generation().next());
                 self.tail.replace(Some(task));
                 return;
             }
