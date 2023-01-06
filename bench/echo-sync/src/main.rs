@@ -3,27 +3,28 @@
 #![feature(type_alias_impl_trait)]
 
 use defmt_rtt as _;
-use heapless::Vec;
 use panic_probe as _;
 use stm32f3 as _;
 
+use heapless::Vec;
 use smoltcp::iface::{InterfaceBuilder, Neighbor, NeighborCache, Route, Routes, SocketStorage};
 use smoltcp::socket::{AnySocket, TcpSocket, TcpSocketBuffer};
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
-
 use stm32f3xx_hal::delay::Delay;
-use stm32f3xx_hal::pac;
+use stm32f3xx_hal::pac::{self, interrupt};
 use stm32f3xx_hal::prelude::*;
+use stm32f3xx_hal::rcc::{self, Clocks};
 use stm32f3xx_hal::spi::Spi;
+use stm32f3xx_hal::timer::{Event, Timer};
 
 use chrono::net::devices::Enc28j60;
-use chrono::time::Instant;
+use chrono::time::{driver, Instant, Duration};
 
 const MAC_ADDR: [u8; 6] = [0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
 const KB: u16 = 1024; // bytes
 const RX_BUF_SIZE: u16 = 7 * KB;
 
-const NUM_SOCKETS: usize = 50;
+const NUM_SOCKETS: usize = 4;
 static mut BUFFERS: [([u8; 64], [u8; 64]); NUM_SOCKETS] = [([0; 64], [0; 64]); NUM_SOCKETS];
 
 #[cortex_m_rt::entry]
@@ -45,8 +46,14 @@ fn main() -> ! {
     let mut flash = peripherals.FLASH.constrain();
     let clocks = cfg.freeze(&mut flash.acr);
 
-    let core_peripherals = unsafe { pac::CorePeripherals::steal() };
+    let mut core_peripherals = unsafe { pac::CorePeripherals::steal() };
+    core_peripherals.DCB.enable_trace();
+    core_peripherals.DWT.enable_cycle_counter();
 
+    // INIT TIMER
+    unsafe { driver().init(peripherals.TIM2, clocks, &mut rcc.apb1); }
+
+    // INIT NETWORKING
     let mut gpioa = peripherals.GPIOA.split(&mut rcc.ahb);
 
     // SPI
@@ -138,14 +145,15 @@ fn main() -> ! {
     loop {
         let timestamp = Instant::now();
         match interface.poll(timestamp.into()) {
-            Ok(_) => { defmt::trace!("Polling") }
+            Ok(_) => {
+                defmt::trace!("Polling")
+            }
             Err(e) => {
                 defmt::info!("poll error: {}", e);
             }
         }
 
         for (i, (_, socket)) in interface.sockets_mut().enumerate() {
-            // let socket = interface.get_socket::<TcpSocket>(tcp_handle);
             // Note: safe to unwrap since we only have TCP sockets
             let socket = TcpSocket::downcast(socket).unwrap();
             if !socket.is_open() {
@@ -172,6 +180,22 @@ fn main() -> ! {
                 };
 
                 if socket.can_send() && !data.is_empty() {
+                    // sleep to simulate a slow request
+                    defmt::debug!("SLEEPING");
+                    let start = Instant::now();
+                    let sleep = Duration::from_secs(1);
+                    unsafe {
+                        driver().start(sleep);
+                    }
+                    loop {
+                        if Instant::now() - start < sleep {
+                            cortex_m::asm::wfe()
+                        } else {
+                            break
+                        }
+                    }
+                    defmt::debug!("AWAKE");
+
                     defmt::debug!("Send data: {:?}", &data[..bytes]);
                     match socket.send_slice(&data[..bytes]) {
                         Ok(_) => {}
