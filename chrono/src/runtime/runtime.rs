@@ -97,7 +97,7 @@ impl Runtime {
                 let task = self.tasks.pop_front();
                 match task {
                     Some(task) => {
-                        defmt::trace!("{}, {}: Popped off executor queue and running", task.id, task.generation);
+                        defmt::trace!("{}, {}: Executing", task.id, task.generation);
                         task.run()
                     }
                     None => break,

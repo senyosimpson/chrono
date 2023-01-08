@@ -1,67 +1,42 @@
 use core::cell::Cell;
-use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
 
 use crate::task::Task;
 use crate::time::Instant;
 
-pub(crate) struct TaskQueue {
-    list: LinkedList,
-}
-
 pub(crate) struct TimerQueue {
-    list: LinkedList,
-    deadline: Cell<Option<Instant>>,
-}
-
-pub(crate) struct LinkedList {
     pub head: Cell<Option<NonNull<Task>>>,
     pub tail: Cell<Option<NonNull<Task>>>,
-    pub generation: Cell<Generation>,
+    deadline: Cell<Option<Instant>>,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, defmt::Format)]
-pub struct Generation(pub u8);
-
-// ===== impl TaskQueue =====
-
-impl TaskQueue {
-    pub const fn new() -> TaskQueue {
-        TaskQueue {
-            list: LinkedList::new(),
-        }
-    }
-}
-
-impl Deref for TaskQueue {
-    type Target = LinkedList;
-
-    fn deref(&self) -> &Self::Target {
-        &self.list
-    }
-}
-
-impl DerefMut for TaskQueue {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.list
-    }
-}
-
-// Safe since we are in a single-threaded environment
-unsafe impl Sync for TaskQueue {}
 
 // ===== impl TimerQueue =====
 
 impl TimerQueue {
     pub const fn new() -> TimerQueue {
         TimerQueue {
-            list: LinkedList::new(),
+            head: Cell::new(None),
+            tail: Cell::new(None),
             deadline: Cell::new(None),
         }
     }
 
     pub fn deadline(&self) -> Option<Instant> {
         self.deadline.get()
+    }
+
+    /// Add an element to the back of list
+    pub fn push_back(&mut self, task: NonNull<Task>) {
+        unsafe {
+            if let Some(mut tail) = self.tail.get() {
+                tail.as_mut().timers.set_next(Some(task));
+                self.tail.replace(Some(task));
+                return;
+            }
+
+            self.head.replace(Some(task));
+            self.tail.replace(Some(task));
+        }
     }
 
     /// Process all timers in the timer queue. If a timer has expired, the
@@ -151,104 +126,5 @@ impl TimerQueue {
         } else {
             self.deadline.replace(None);
         }
-    }
-}
-
-impl Deref for TimerQueue {
-    type Target = LinkedList;
-
-    fn deref(&self) -> &Self::Target {
-        &self.list
-    }
-}
-
-impl DerefMut for TimerQueue {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.list
-    }
-}
-
-// Safe since we are in a single-threaded environment
-unsafe impl Sync for TimerQueue {}
-
-// ===== impl LinkedList =====
-
-impl LinkedList {
-    pub const fn new() -> LinkedList {
-        LinkedList {
-            head: Cell::new(None),
-            tail: Cell::new(None),
-            generation: Cell::new(Generation(0)),
-        }
-    }
-
-    pub fn prepare(&self) -> Generation {
-        let generation = self.generation().next();
-        self.generation.replace(generation);
-        generation
-    }
-
-    /// Get the current generation of the list
-    pub fn generation(&self) -> Generation {
-        self.generation.get()
-    }
-
-    /// Is the list empty?
-    pub fn is_empty(&self) -> bool {
-        self.head.get().is_none()
-    }
-
-    /// Add an element to the back of list
-    pub fn push_back(&mut self, mut task: NonNull<Task>) {
-        unsafe {
-            // Set the generation of the new task to the next generation
-            // so that we only process it on the next round
-            task.as_mut().set_generation(self.generation().next());
-
-            if let Some(mut tail) = self.tail.get() {
-                tail.as_mut().tasks.set_next(Some(task));
-                self.tail.replace(Some(task));
-                return;
-            }
-
-            self.head.replace(Some(task));
-            self.tail.replace(Some(task));
-        }
-    }
-
-    /// Pop an item off the front of the list
-    pub fn pop_front(&self) -> Option<&mut Task> {
-        match self.head.get() {
-            None => None,
-            Some(mut head) => {
-                let curr = unsafe { head.as_mut() };
-                // If the task isn't from the current batch, return
-                if curr.generation() != self.generation() {
-                    return None;
-                }
-
-                if curr.tasks.next().is_none() {
-                    // We are on the last element in the queue. Set
-                    // head and tail to None and return the task
-                    self.head.replace(None);
-                    self.tail.replace(None);
-                    return Some(curr);
-                }
-
-                // Set the head to the next timer the current head
-                // is pointing to
-                self.head.replace(curr.tasks.next());
-                // Set next timer in the current task to null
-                curr.tasks.set_next(None);
-                // Return the current task
-                Some(curr)
-            }
-        }
-    }
-}
-
-impl Generation {
-    pub fn next(&self) -> Generation {
-        Generation(self.0.wrapping_add(1))
     }
 }
