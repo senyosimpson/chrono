@@ -26,9 +26,11 @@ impl TimerQueue {
     }
 
     /// Add an element to the back of list
-    pub fn push_back(&mut self, task: NonNull<Task>) {
+    pub fn push_back(&mut self, mut task: NonNull<Task>) {
         unsafe {
             if let Some(mut tail) = self.tail.get() {
+                task.as_mut().timers.set_prev(Some(tail));
+
                 tail.as_mut().timers.set_next(Some(task));
                 self.tail.replace(Some(task));
                 return;
@@ -47,17 +49,23 @@ impl TimerQueue {
         let mut deadline = Instant::max();
 
         let mut curr = match self.head.get() {
-            None => return,
+            None => {
+                defmt::warn!("NO HEAD");
+                return;
+            },
             Some(mut curr) => unsafe { curr.as_mut() },
         };
 
         loop {
             if curr.is_timer_complete(now) {
+                defmt::debug!("{}, {}: Timer complete", curr.id, curr.generation);
                 // Timer complete so we're going to remove this entry.
                 curr.clear_expiry();
 
-                // If the next entry is null, we are the tail
-                if curr.timers.next().is_none() {
+                // If the prev and next entry is null, we are the only element
+                // in the queue
+                if curr.timers.prev().is_none() && curr.timers.next().is_none() {
+                defmt::debug!("{}, {}: Only element", curr.id, curr.generation);
                     // Set head and tail to None, nothing more to process
                     self.head.replace(None);
                     self.tail.replace(None);
@@ -66,10 +74,31 @@ impl TimerQueue {
                     break;
                 }
 
+                // If the next entry is null, we are the tail
+                if curr.timers.next().is_none() {
+                    // Update the previous timer to have no next pointer
+                    let mut prev = curr.timers.prev().unwrap();
+                    unsafe { prev.as_mut().timers.set_next(None); }
+
+                    // Set the tail to the previous timer
+                    self.tail.replace(curr.timers.prev());
+                    // Clear the prev timer
+                    curr.timers.set_prev(None);
+                    // Schedule the task associated with the timer
+                    curr.schedule();
+                    break;
+                }
+
                 // If the previous entry is null, we are the head
                 if curr.timers.prev().is_none() {
+                    // Update the next timer to have no prev pointer
+                    let mut next = curr.timers.next().unwrap();
+                    unsafe { next.as_mut().timers.set_prev(None); }
+
                     // Move the head forward
                     self.head.replace(curr.timers.next());
+                    // Clear the next timer
+                    curr.timers.set_next(None);
                     // Schedule the task associated with the timer
                     curr.schedule();
                     // Set curr to the new head for the next loop
