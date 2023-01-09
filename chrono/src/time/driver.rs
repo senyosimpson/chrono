@@ -33,7 +33,6 @@ impl Driver {
         }
     }
 
-    #[allow(unused)]
     pub fn init(&mut self, tim: TIM2, clocks: Clocks, apb: &mut <TIM2 as rcc::RccBus>::Bus) {
         self.inner = Some(RefCell::new(Inner::new(tim, clocks, apb)));
         self.initialised = true;

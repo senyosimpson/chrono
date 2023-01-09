@@ -11,7 +11,7 @@ use smoltcp::wire::IpEndpoint;
 use crate::io::{AsyncRead, AsyncWrite};
 use crate::net;
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, defmt::Format)]
 pub enum Error {
     Unknown,
     AlreadyOpen,

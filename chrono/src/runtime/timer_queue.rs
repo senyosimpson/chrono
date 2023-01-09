@@ -49,10 +49,7 @@ impl TimerQueue {
         let mut deadline = Instant::max();
 
         let mut curr = match self.head.get() {
-            None => {
-                defmt::warn!("NO HEAD");
-                return;
-            },
+            None => return,
             Some(mut curr) => unsafe { curr.as_mut() },
         };
 

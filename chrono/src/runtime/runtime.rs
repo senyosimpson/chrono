@@ -75,6 +75,7 @@ impl Runtime {
     
             // Process all timers
             let now = Instant::now();
+            defmt::trace!("Processing timers");
             self.timers.process(now);
 
             // Start the timer if there is a deadline
@@ -86,7 +87,7 @@ impl Runtime {
 
             // If the task queue is empty, wait for an event/interrupt
             if self.tasks.is_empty() {
-                defmt::debug!("Queue empty. Waiting for event");
+                defmt::debug!("Waiting for event");
                 cortex_m::asm::wfe()
             }
 
