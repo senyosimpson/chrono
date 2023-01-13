@@ -62,7 +62,6 @@ impl TimerQueue {
                 // If the prev and next entry is null, we are the only element
                 // in the queue
                 if curr.timers.prev().is_none() && curr.timers.next().is_none() {
-                defmt::debug!("{}, {}: Only element", curr.id, curr.generation);
                     // Set head and tail to None, nothing more to process
                     self.head.replace(None);
                     self.tail.replace(None);
@@ -75,7 +74,9 @@ impl TimerQueue {
                 if curr.timers.next().is_none() {
                     // Update the previous timer to have no next pointer
                     let mut prev = curr.timers.prev().unwrap();
-                    unsafe { prev.as_mut().timers.set_next(None); }
+                    unsafe {
+                        prev.as_mut().timers.set_next(None);
+                    }
 
                     // Set the tail to the previous timer
                     self.tail.replace(curr.timers.prev());
@@ -90,7 +91,9 @@ impl TimerQueue {
                 if curr.timers.prev().is_none() {
                     // Update the next timer to have no prev pointer
                     let mut next = curr.timers.next().unwrap();
-                    unsafe { next.as_mut().timers.set_prev(None); }
+                    unsafe {
+                        next.as_mut().timers.set_prev(None);
+                    }
 
                     // Move the head forward
                     self.head.replace(curr.timers.next());
@@ -107,7 +110,7 @@ impl TimerQueue {
                 unsafe {
                     // Safe to unwrap because we've already checked we aren't the head or tail
                     let mut next = curr.timers.next().unwrap();
-                    let mut prev = curr.timers.next().unwrap();
+                    let mut prev = curr.timers.prev().unwrap();
 
                     // Since we are removing an element in the middle, we have
                     // to update references.
@@ -120,7 +123,7 @@ impl TimerQueue {
 
                     // Set the next and prev to None
                     curr.timers.set_next(None);
-                    curr.timers.set_next(None);
+                    curr.timers.set_prev(None);
 
                     // Schedule the task associated with the timer
                     curr.schedule();
@@ -133,7 +136,6 @@ impl TimerQueue {
             // The timer is not finished. Check to see if it should become the new deadline
             if let Some(t) = curr.expiry() {
                 if t < deadline {
-                    defmt::trace!("Setting deadline");
                     deadline = t
                 }
             }
