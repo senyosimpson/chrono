@@ -47,6 +47,8 @@ impl TaskQueue {
             task.as_mut().set_generation(self.generation().next());
 
             if let Some(mut tail) = self.tail.get() {
+                task.as_mut().tasks.set_prev(Some(tail));
+
                 tail.as_mut().tasks.set_next(Some(task));
                 self.tail.replace(Some(task));
                 return;
@@ -73,14 +75,22 @@ impl TaskQueue {
                     // head and tail to None and return the task
                     self.head.replace(None);
                     self.tail.replace(None);
+
+                    curr.tasks.set_next(None);
+                    curr.tasks.set_prev(None);
+
                     return Some(curr);
                 }
 
+                let mut next = curr.tasks.next().unwrap();
+                unsafe { next.as_mut().tasks.set_prev(None); }
                 // Set the head to the next timer the current head
                 // is pointing to
                 self.head.replace(curr.tasks.next());
-                // Set next timer in the current task to null
+                // Set prev and next timer in the current task to null
                 curr.tasks.set_next(None);
+                curr.tasks.set_prev(None);
+
                 // Return the current task
                 Some(curr)
             }
